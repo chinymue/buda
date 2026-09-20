@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:buda_mvp/views/list_tpl.dart';
 
+import 'mock/mock_repos.dart';
+import 'mock/mock_data.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -11,6 +14,9 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    final userRepo = MockUserRepo();
+    final categoryRepo = MockCategoryRepo();
+    final transactionRepo = MockTransactionRepo();
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
@@ -31,13 +37,24 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(
+        title: 'Flutter Demo Home Page',
+        uRepo: userRepo,
+        cRepo: categoryRepo,
+        tRepo: transactionRepo,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  const MyHomePage({
+    super.key,
+    required this.title,
+    required this.uRepo,
+    required this.cRepo,
+    required this.tRepo,
+  });
 
   // This widget is the home page of your application. It is stateful, meaning
   // that it has a State object (defined below) that contains fields that affect
@@ -49,43 +66,127 @@ class MyHomePage extends StatefulWidget {
   // always marked "final".
 
   final String title;
+  final MockUserRepo uRepo;
+  final MockCategoryRepo cRepo;
+  final MockTransactionRepo tRepo;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-  List<String> _items = [];
+  late List<MockUser> _users;
+  late List<MockCategory> _categories;
+  late List<MockTransaction> _transactions;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  void updateState() => setState(() {
+    _users = widget.uRepo.getAll();
+    _categories = widget.cRepo.getAll();
+    _transactions = widget.tRepo.getAll();
+  });
+  void updateUsersState() => setState(() => _users = widget.uRepo.getAll());
+  void updateCategoriesState() =>
+      setState(() => _categories = widget.cRepo.getAll());
+  void updateTransactionsState() =>
+      setState(() => _transactions = widget.tRepo.getAll());
+
+  void showData() {
+    showUsers();
+    showCategories();
+    showTransactions();
   }
 
-  void _addItem() => setState(() {
-    _counter++;
-    _items.add('Item ${_counter}');
-  });
+  void showUsers() => _users.forEach((u) => print(u.toStr()));
+  void showCategories() => _categories.forEach((c) => print(c.toStr()));
+  void showTransactions() => _transactions.forEach((t) => print(t.toStr()));
 
-  void _removeItem() {
-    if (_counter <= 0) return;
-    setState(() {
-      _items.remove('Item ${_counter}');
-      _counter--;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _users = widget.uRepo.getAll();
+    _categories = widget.cRepo.getAll();
+    _transactions = widget.tRepo.getAll();
   }
 
-  void _clearItems() => setState(() {
-    _items.clear();
-    _counter = 0;
-  });
+  void addUser() {
+    final data = DateTime.now().toString();
+    print('Add User: $data ${'-' * 100}');
+    widget.uRepo.add(MockUser(id: data, username: 'User ${_users.length + 1}'));
+    updateUsersState();
+    showUsers();
+  }
+
+  void addCategory() {
+    final data = DateTime.now().toString();
+    print('Add Category: $data ${'-' * 100}');
+    widget.cRepo.add(
+      MockCategory(
+        id: data,
+        name: 'Category ${_categories.length + 1}',
+        userId: _users.last.id,
+      ),
+    );
+    updateCategoriesState();
+    showCategories();
+  }
+
+  void addTransaction() {
+    final data = DateTime.now();
+    print('Add Transactions: ${data.toString()} ${'-' * 100}');
+    widget.tRepo.add(
+      MockTransaction(
+        id: data.toString(),
+        amount: data.millisecondsSinceEpoch,
+        date: data,
+        categoryId: _categories.last.id,
+        userId: _users.last.id,
+      ),
+    );
+    updateTransactionsState();
+    showTransactions();
+  }
+
+  void removeUser(String id) {
+    print('Remove User $id ${'-' * 100}');
+    widget.tRepo.removeByUserId(id);
+    widget.cRepo.removeByUserId(id);
+    widget.uRepo.removeById(id);
+    updateState();
+    showData();
+  }
+
+  void removeCategory(String id) {
+    print('Remove Category $id ${'-' * 100}');
+    widget.tRepo.removeByCategoryId(id);
+    widget.cRepo.removeById(id);
+    updateTransactionsState();
+    updateCategoriesState();
+    showCategories();
+    showTransactions();
+  }
+
+  void removeTransaction(String id) {
+    print('Remove Transaction $id ${'-' * 100}');
+    widget.tRepo.removeById(id = id);
+    updateTransactionsState();
+    showTransactions();
+  }
+
+  void filterDataOfUser(String id) {
+    print('Filter Data By userId $id ${'-' * 100}');
+    setState(() {
+      _categories = widget.cRepo.getByUser(id);
+      _transactions = widget.tRepo.getByUser(id);
+    });
+    showCategories();
+    showTransactions();
+  }
+
+  void filterTransactionsByCategory(String id) {
+    print('Filter Transactions By categoryId $id ${'-' * 100}');
+    setState(() => _transactions = widget.tRepo.getByCategory(id));
+    showTransactions();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,50 +225,64 @@ class _MyHomePageState extends State<MyHomePage> {
           // wireframe for each widget.
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-
             SizedBox(
-              height: 100,
+              height: 400,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  ListTemplate(
-                    items: _items,
-                    title: 'Items List',
-                    maxHeight: 100,
+                  TListTemplate(
+                    maxWidth: 300,
+                    items: _users,
+                    item2String: ((u) => u.id),
+                    title: 'Users',
+                    onChanged: (id, type) {
+                      switch (type) {
+                        case 'remove':
+                          removeUser(id);
+                        case 'filter':
+                          filterDataOfUser(id);
+                      }
+                    },
                   ),
-                  ListTemplate(
-                    items: _items,
-                    title: 'Items List',
-                    maxHeight: 100,
+                  TListTemplate(
+                    maxWidth: 300,
+                    items: _categories,
+                    item2String: ((c) => c.id),
+                    title: 'Categories',
+                    onChanged: (id, type) {
+                      switch (type) {
+                        case 'remove':
+                          removeCategory(id);
+                        case 'filter':
+                          filterTransactionsByCategory(id);
+                      }
+                    },
                   ),
-                  ListTemplate(
-                    items: _items,
-                    title: 'Items List',
-                    maxHeight: 100,
+                  TListTemplate(
+                    maxWidth: 300,
+                    items: _transactions,
+                    item2String: ((t) => t.id),
+                    title: 'Transactions',
+                    onChanged: (id, type) {
+                      switch (type) {
+                        case 'remove':
+                          removeTransaction(id);
+                      }
+                    },
                   ),
                 ],
               ),
             ),
-            SizedBox(height: 20),
+            SizedBox(height: 10),
             ListActionTemplate(
               actions: [
-                ('Add Item', _addItem),
-                ('Remove Item', _removeItem),
-                ('Clear Items', _clearItems),
+                ('Add user', addUser),
+                ('Add category', addCategory),
+                ('Add Transaction', addTransaction),
               ],
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
