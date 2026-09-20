@@ -35,7 +35,7 @@ class Categories extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-class MockTransaction extends Table {
+class Transactions extends Table {
   TextColumn get id => text()();
   late final Column<int> amount = integer().check(
     amount.isBiggerOrEqualValue(0),
