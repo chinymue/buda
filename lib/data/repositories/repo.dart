@@ -23,13 +23,23 @@ class UserRepo {
 
   // UPDATE
   // Future<bool> update({required User u}) => db.update(db.users).replace(u);
-  // TODO: update modifiedAt
-  Future<int> updateU({required String id, required UsersCompanion u}) =>
-      (db.update(db.users)..where((user) => user.id.equals(id))).write(u);
+  Future<int> updateU({required String id, required UsersCompanion u}) {
+    final ts = DateTime.now();
+    if (u.createdAt.present && u.createdAt.value.isBefore(ts)) {
+      return (db.update(db.users)..where((user) => user.id.equals(id))).write(
+        UsersCompanion(username: u.username, modifiedAt: Value(ts)),
+      );
+    }
+    return Future.value(-1);
+  }
+
   Future<int> updateUser({required String id, required String username}) =>
       (db.update(db.users)..where((user) => user.id.equals(id))).write(
-        UsersCompanion(username: Value(username)),
-      ); // unique để database tự đảm bảo
+        UsersCompanion(
+          username: Value(username),
+          modifiedAt: Value(DateTime.now()),
+        ),
+      );
 
   // DELETE
   Future<int> clear() => db.delete(db.users).go();
