@@ -37,21 +37,3 @@ class UserRepo {
   Future<int> deleteById({required String id}) =>
       (db.delete(db.users)..where((u) => u.id.equals(id))).go();
 }
-
-// // run by: flutter run [-t] <filename>.dart
-// Future<void> main() async {
-//   final db = AppDatabase.test();
-//   final repo = UserRepo(db: db);
-
-//   await repo.createUser(id: 'u1', username: 'alice');
-
-//   final users = await repo.getAll();
-
-//   print('Users:');
-
-//   for (final user in users) {
-//     print('id=${user.id}, username=${user.username}');
-//   }
-
-//   await db.close();
-// }
