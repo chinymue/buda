@@ -4,7 +4,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Users])
+@DriftDatabase(tables: [Users, Categories, Transactions])
 class AppDatabase extends _$AppDatabase {
   AppDatabase()
     : super(
