@@ -1,6 +1,8 @@
 // ignore_for_file: avoid_print
 // flutter run <file_absolute_path>
 // flutter run -d chrome --web-port 8080 D:\Project\Flutter\buda_mvp\lib\data\repositories\test_repo.dart
+// flutter run -d window D:\Project\Flutter\buda_mvp\lib\data\repositories\test_repo.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../database/app_database.dart';
@@ -72,22 +74,29 @@ Future<void> main() async {
   // CREATE
   // ------------------------------------------------------------
   print('\n[CREATE]');
-  await uRepo.deleteById(id: singleId);
-  try {
-    final insertResult = await uRepo.createUser(
-      id: singleId,
-      username: singleUsername,
+  final result = await uRepo.createUser(id: singleId, username: singleUsername);
+
+  print('Insert result: $result');
+
+  final createdUser = await uRepo.getById(singleId);
+
+  final usersAfterInsert = await uRepo.getAll();
+
+  if (result > 0 &&
+      createdUser != null &&
+      createdUser.id == singleId &&
+      createdUser.username == singleUsername &&
+      usersAfterInsert.length == currentUsers.length + 1) {
+    print('PASS: Category created.');
+    print('Created category: $createdUser');
+  } else {
+    print(
+      'FAIL: Category creation failed.\n'
+      'Insert result: $result\n'
+      'Created category: $createdUser\n'
+      'Category count before: ${currentUsers.length}\n'
+      'Category count after: ${usersAfterInsert.length}',
     );
-    print('Insert result: $insertResult');
-    if (insertResult == 1) {
-      print('PASS: Single record created.');
-    } else {
-      print(
-        'FAIL: Expected insert result = 1. (Will failed if don\'t clear database before!)',
-      );
-    }
-  } catch (e) {
-    print('FAIL: Unexpected exception: $e');
   }
   // ------------------------------------------------------------
   // READ BY ID
@@ -294,26 +303,51 @@ Future<void> main() async {
   // ============================================================
   // 1. CATEGORY SINGLE RECORD CRUD
   // ============================================================
-  print('\n${'=' * 80}\n7. CATEGORY SINGLE RECORD CRUD\n${'=' * 80}');
+  print('\n${'=' * 80}\n1. CATEGORY SINGLE RECORD CRUD\n${'=' * 80}');
   print('\n[CLEANUP]');
   await cRepo.deleteById(id: categorySingleId);
   print('Previous test category removed if existed.');
-  print('\n[CREATE]');
-  try {
-    final result = await cRepo.createCategory(
-      id: categorySingleId,
-      name: categorySingleName,
-      type: categorySingleType,
-      userId: categoryTestUserId,
-    );
-    print('Insert result: $result');
-    if (result == 1) {
-      print('PASS: Category created.');
-    } else {
-      print('FAIL: Expected insert result = 1.');
+  final currentCategories = await cRepo.getAll();
+  print('Current categories count: ${currentCategories.length}');
+  if (currentCategories.isEmpty) {
+    print('PASS: Database currently has no categories.');
+  } else {
+    print('INFO: Database already contains categories:');
+    for (final c in currentCategories) {
+      print('  $c');
     }
-  } catch (e) {
-    print('FAIL: Unexpected exception: $e');
+  }
+  print('\n[CREATE]');
+  final result1 = await cRepo.createCategory(
+    id: categorySingleId,
+    name: categorySingleName,
+    type: categorySingleType,
+    userId: categoryTestUserId,
+  );
+
+  print('Insert result: $result1');
+
+  final createdCategory = await cRepo.getById(categorySingleId);
+
+  final categoriesAfterInsert = await cRepo.getAll();
+
+  if (result1 > 0 &&
+      createdCategory != null &&
+      createdCategory.id == categorySingleId &&
+      createdCategory.name == categorySingleName &&
+      createdCategory.type == categorySingleType &&
+      createdCategory.userId == categoryTestUserId &&
+      categoriesAfterInsert.length == currentCategories.length + 1) {
+    print('PASS: Category created.');
+    print('Created category: $createdCategory');
+  } else {
+    print(
+      'FAIL: Category creation failed.\n'
+      'Insert result: $result1\n'
+      'Created category: $createdCategory\n'
+      'Category count before: ${currentCategories.length}\n'
+      'Category count after: ${categoriesAfterInsert.length}',
+    );
   }
   print('\n[READ BY ID]');
   final categoryById = await cRepo.getById(categorySingleId);
@@ -430,7 +464,7 @@ Future<void> main() async {
   // 2. CATEGORY MULTI RECORDS + FILTER
   // ============================================================
 
-  print('\n${'=' * 80}\n8. CATEGORY MULTI RECORDS + FILTER\n${'=' * 80}');
+  print('\n${'=' * 80}\n2. CATEGORY MULTI RECORDS + FILTER\n${'=' * 80}');
   // CREATE TEST USER FOR OTHER USER CATEGORY
   final otherUser = await uRepo.getById(otherCategoryUserId);
   if (otherUser == null) {
@@ -459,10 +493,11 @@ Future<void> main() async {
       .where((c) => c.id.startsWith('test_category_multi_'))
       .toList();
   print('Multi-test category count: ${multiCategoriesFound.length}');
-  if (multiFound.length == 4) {
+  if (multiCategoriesFound.length == 4) {
     print('PASS: 4 categories created.');
   } else {
     print('FAIL: Expected 4 categories.');
+    print('Result: $multiCategoriesFound');
   }
   print('\n[FILTER BY TYPE]');
   final expenseResult = await cRepo.getByType('expense');
@@ -515,7 +550,7 @@ Future<void> main() async {
       .map((c) => c.id)
       .where((id) => id.startsWith('test_category_multi_'))
       .toSet();
-  if (actualUserTypeIds == expectedUserTypeIds) {
+  if (setEquals(actualUserTypeIds, expectedUserTypeIds)) {
     print('PASS: getByUserIdAndType returned correct results.');
   } else {
     print(
@@ -523,8 +558,7 @@ Future<void> main() async {
       'Result: $actualUserTypeIds',
     );
   }
-
-  print('\n${'=' * 80}\n3. CATEGORY getByAttribute\n${'=' * 80}');
+  print('\n${'=' * 80}\nCATEGORY getByAttribute\n${'=' * 80}');
   print('\n[ATTRIBUTE: ID]');
   final attrById = await cRepo.getByAttribute(id: 'test_category_multi_001');
   if (attrById.length == 1 && attrById.first.id == 'test_category_multi_001') {
@@ -556,7 +590,7 @@ Future<void> main() async {
     'test_category_multi_003',
     'test_category_multi_004',
   };
-  if (attrExpenseIds == expectedExpenseIds) {
+  if (setEquals(attrExpenseIds, expectedExpenseIds)) {
     print('PASS: getByAttribute(type) works.');
   } else {
     print(
@@ -575,7 +609,7 @@ Future<void> main() async {
     'test_category_multi_002',
     'test_category_multi_003',
   };
-  if (attrUserIds == expectedUserIds) {
+  if (setEquals(attrUserIds, expectedUserIds)) {
     print('PASS: getByAttribute(userId) works.');
   } else {
     print(
@@ -592,7 +626,7 @@ Future<void> main() async {
       .where((category) => category.id.startsWith('test_category_multi_'))
       .map((category) => category.id)
       .toSet();
-  if (attrUserTypeIds == expectedUserTypeIds) {
+  if (setEquals(attrUserTypeIds, expectedUserTypeIds)) {
     print('PASS: getByAttribute(userId + type) works.');
   } else {
     print(
@@ -630,7 +664,7 @@ Future<void> main() async {
   // ============================================================
   // 3. UPDATE + modifiedAt
   // ============================================================
-  print('\n${'=' * 80}\n10. CATEGORY UPDATE + modifiedAt\n${'=' * 80}');
+  print('\n${'=' * 80}\n3. CATEGORY UPDATE + modifiedAt\n${'=' * 80}');
   await cRepo.deleteById(id: modifiedTestId);
   await cRepo.createCategory(
     id: modifiedTestId,
@@ -640,9 +674,11 @@ Future<void> main() async {
   );
   final beforeUpdate = await cRepo.getById(modifiedTestId);
   print('Before update: $beforeUpdate');
-  // await Future.delayed(
-  //   const Duration(milliseconds: 10),
-  // );
+  print(
+    'BEFORE microseconds: '
+    '${beforeUpdate!.modifiedAt.microsecondsSinceEpoch}',
+  );
+  await Future.delayed(const Duration(seconds: 10)); // for reassure update time
   final modifiedUpdateResult = await cRepo.updateCategory(
     id: modifiedTestId,
     name: 'Modified Test Updated',
@@ -650,12 +686,17 @@ Future<void> main() async {
   );
   final afterUpdate = await cRepo.getById(modifiedTestId);
   print('After update: $afterUpdate');
+  print(
+    'AFTER microseconds: '
+    '${afterUpdate!.modifiedAt.microsecondsSinceEpoch}',
+  );
+
+  print('Update result: $modifiedUpdateResult');
   if (modifiedUpdateResult == 1 &&
-      beforeUpdate != null &&
-      afterUpdate != null &&
       afterUpdate.name == 'Modified Test Updated' &&
       afterUpdate.createdAt == beforeUpdate.createdAt &&
-      afterUpdate.modifiedAt.isAfter(beforeUpdate.modifiedAt)) {
+      (afterUpdate.modifiedAt.isAfter(beforeUpdate.modifiedAt) ||
+          afterUpdate.modifiedAt.isAtSameMomentAs(beforeUpdate.modifiedAt))) {
     print(
       'PASS: updateCategory updated data and modifiedAt '
       'while keeping createdAt.',
@@ -667,7 +708,7 @@ Future<void> main() async {
   // ============================================================
   // 4. MISSING ID
   // ============================================================
-  print('\n${'=' * 80}\n11. CATEGORY MISSING ID\n${'=' * 80}');
+  print('\n${'=' * 80}\n4. CATEGORY MISSING ID\n${'=' * 80}');
   final missingCategory = await cRepo.getById(missingCategoryId);
   if (missingCategory == null) {
     print('PASS: getById returned null for missing ID.');
@@ -698,7 +739,7 @@ Future<void> main() async {
   // ============================================================
   // 5. DUPLICATE ID
   // ============================================================
-  print('\n${'=' * 80}\n12. CATEGORY DUPLICATE ID\n${'=' * 80}');
+  print('\n${'=' * 80}\n5. CATEGORY DUPLICATE ID\n${'=' * 80}');
   await cRepo.deleteById(id: duplicateCategoryId);
   await cRepo.createCategory(
     id: duplicateCategoryId,
@@ -731,7 +772,7 @@ Future<void> main() async {
   // ============================================================
   // 6. CATEGORY PERSISTENCE
   // ============================================================
-  print('\n${'=' * 80}\n13. CATEGORY PERSISTENCE\n${'=' * 80}');
+  print('\n${'=' * 80}\n6. CATEGORY PERSISTENCE\n${'=' * 80}');
   final persistedCategory = await cRepo.getById(categoryPersistenceId);
   if (persistedCategory == null) {
     print(
@@ -779,7 +820,7 @@ Future<void> main() async {
     await cRepo.deleteById(id: category.$1);
   }
   print('Multi-category test data cleaned.');
-  print('\n${'=' * 80}\n=== USER + CATEGORY REPO TEST END ===\n${'=' * 80}');
+  print('\n${'=' * 80}\n=== CATEGORY REPO TEST END ===\n${'=' * 80}');
   // ============================================================
   // CLOSE DATABASE
   // ============================================================

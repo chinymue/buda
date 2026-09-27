@@ -135,17 +135,18 @@ class CategoryRepo {
     return Future.value(-1);
   }
 
-  Future<int> updateCategory({
-    required String id,
-    String? name,
-    String? type,
-  }) => (db.update(db.categories)..where((c) => c.id.equals(id))).write(
-    CategoriesCompanion(
-      name: name != null ? Value(name) : const Value.absent(),
-      type: type != null ? Value(type) : const Value.absent(),
-      modifiedAt: Value(DateTime.now()),
-    ),
-  );
+  Future<int> updateCategory({required String id, String? name, String? type}) {
+    final ts = DateTime.now();
+    print('UPDATE timestamp: $ts');
+    print('UPDATE microseconds: ${ts.microsecondsSinceEpoch}');
+    return (db.update(db.categories)..where((c) => c.id.equals(id))).write(
+      CategoriesCompanion(
+        name: name != null ? Value(name) : const Value.absent(),
+        type: type != null ? Value(type) : const Value.absent(),
+        modifiedAt: Value(ts),
+      ),
+    );
+  }
 
   // DELETE
   Future<int> clear() => db.delete(db.categories).go();
