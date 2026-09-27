@@ -10,3 +10,4 @@ flutter pub add --dev drift_dev build_runner
 ```
 
 generate file: `flutter pub run build_runner build` or `dart run build_runner build`
+re-generate file: `dart run build_runner build --delete-conflicting-outputs`
