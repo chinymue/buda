@@ -25,12 +25,14 @@ class AppDatabase extends _$AppDatabase {
     onCreate: (m) async {
       await m.createAll();
     },
-
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(categories);
         await m.createTable(transactions);
       }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
     },
   );
 }
