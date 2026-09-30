@@ -1,3 +1,5 @@
+import 'dart:js_interop';
+
 import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
@@ -137,8 +139,8 @@ class CategoryRepo {
 
   Future<int> updateCategory({required String id, String? name, String? type}) {
     final ts = DateTime.now();
-    print('UPDATE timestamp: $ts');
-    print('UPDATE microseconds: ${ts.microsecondsSinceEpoch}');
+    // print('UPDATE timestamp: $ts');
+    // print('UPDATE microseconds: ${ts.microsecondsSinceEpoch}');
     return (db.update(db.categories)..where((c) => c.id.equals(id))).write(
       CategoriesCompanion(
         name: name != null ? Value(name) : const Value.absent(),
@@ -153,4 +155,148 @@ class CategoryRepo {
   // Future<int> deleteU({required Category u}) => db.delete(db.categories).delete(u);
   Future<int> deleteById({required String id}) =>
       (db.delete(db.categories)..where((u) => u.id.equals(id))).go();
+}
+
+class TransactionRepo {
+  final AppDatabase db;
+  TransactionRepo({required this.db});
+  // SELECT *
+  Future<List<Transaction>> getAll() => db.select(db.transactions).get();
+  // SELECT ... WHERE ...
+  Future<Transaction?> getById(String id) => (db.select(
+    db.transactions,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<List<Transaction>> getByType(String type) =>
+      (db.select(db.transactions)..where((t) => t.type.equals(type))).get();
+  Future<List<Transaction>> getByCategory(String categoryId) => (db.select(
+    db.transactions,
+  )..where((t) => t.categoryId.equals(categoryId))).get();
+  Future<List<Transaction>> getByUser(String userId) =>
+      (db.select(db.transactions)..where((t) => t.userId.equals(userId))).get();
+  Future<List<Transaction>> getByAmount({int? amountMin, int? amountMax}) {
+    if (amountMin != null && amountMax != null) {
+      return (db.select(
+        db.transactions,
+      )..where((t) => t.amount.isBetweenValues(amountMin, amountMax))).get();
+    }
+    if (amountMin == null && amountMax != null) {
+      return (db.select(
+        db.transactions,
+      )..where((t) => t.amount.isSmallerOrEqualValue(amountMax))).get();
+    }
+    if (amountMin != null && amountMax == null) {
+      return (db.select(
+        db.transactions,
+      )..where((t) => t.amount.isBiggerOrEqualValue(amountMin))).get();
+    }
+    return getAll();
+  }
+
+  Future<List<Transaction>> getByDate({
+    required DateTime start,
+    DateTime? end,
+  }) {
+    // TODO: datetime still need to normalize into day only
+    if (end != null) {
+      return (db.select(
+        db.transactions,
+      )..where((t) => t.date.isBetweenValues(start, end))).get();
+    }
+    return (db.select(
+      db.transactions,
+    )..where((t) => t.date.equals(start))).get();
+  }
+
+  // TODO: getByAttribute condition can be return by other getBy before
+  Future<List<Transaction>> getByAttribute({
+    String? id,
+    int? amountMin,
+    int? amountMax,
+    String? type,
+    DateTime? start,
+    DateTime? end,
+    String? categoryId,
+    String? userId,
+  }) {
+    final query = db.select(db.transactions);
+    query.where((c) {
+      Expression<bool>? condition;
+      condition = id != null ? c.id.equals(id) : condition;
+      // if (amountMin != null || amountMax != null) {
+      //   condition = condition == null
+      //       ? c.name.equals(name)
+      //       : condition & c.name.equals(name);
+      // }
+      if (type != null) {
+        condition = condition == null
+            ? c.type.equals(type)
+            : condition & c.type.equals(type);
+      }
+      if (userId != null) {
+        condition = condition == null
+            ? c.userId.equals(userId)
+            : condition & c.userId.equals(userId);
+      }
+      return condition ?? const Constant(false);
+    });
+    return query.get();
+  }
+
+  // INSERT
+  Future<int> create({required TransactionsCompanion t}) =>
+      db.into(db.transactions).insert(t);
+  Future<int> createTransaction({
+    required String id,
+    required int amount,
+    String? type,
+    DateTime? date,
+    String? categoryId,
+    required String userId,
+  }) async {
+    if (amount < 0) {
+      return Future.value(-1);
+    }
+    if (categoryId != null && type == null) {
+      final category = await CategoryRepo(db: db).getById(categoryId);
+      type = category != null ? category.type : 'expense';
+    }
+    type ??= 'expense';
+    final ts = DateTime.now();
+    date ??= ts;
+    return db
+        .into(db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            id: id,
+            amount: amount,
+            type: Value(type),
+            date: Value(date),
+            categoryId: Value(categoryId),
+            userId: userId,
+            createdAt: Value(ts),
+            modifiedAt: Value(ts),
+          ),
+        );
+  }
+
+  // DELETE
+  Future<int> clear() => db.delete(db.transactions).go();
+  // Future<int> deleteU({required Transaction u}) => db.delete(db.transactions).delete(u);
+  Future<int> deleteById({required String id}) =>
+      (db.delete(db.transactions)..where((t) => t.id.equals(id))).go();
+  Future<int> deleteByUserId({required String id}) =>
+      (db.delete(db.transactions)..where((t) => t.userId.equals(id))).go();
+  Future<int> deleteByCategoryId({required String id}) =>
+      (db.delete(db.transactions)..where((t) => t.categoryId.equals(id))).go();
+
+  // UPDATE
+  // Future<bool> update({required Category u}) => db.update(db.categories).replace(u);
+  Future<bool> updateT(
+    String id, {
+    int? amount,
+    String? type,
+    DateTime? dateTime,
+  }) {
+    return Future.value(false);
+  }
 }

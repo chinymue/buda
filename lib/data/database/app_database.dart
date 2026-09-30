@@ -72,6 +72,8 @@ class Transactions extends Table {
   DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
   TextColumn get categoryId => text().nullable().references(Categories, #id)();
   TextColumn get userId => text().references(Users, #id)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get modifiedAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
   Set<Column> get primaryKey => {id};
