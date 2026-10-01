@@ -1,5 +1,3 @@
-import 'dart:js_interop';
-
 import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
@@ -207,7 +205,59 @@ class TransactionRepo {
     )..where((t) => t.date.equals(start))).get();
   }
 
-  // TODO: getByAttribute condition can be return by other getBy before
+  Expression<bool>? _buildCondition({
+    String? id,
+    int? amountMin,
+    int? amountMax,
+    String? type,
+    DateTime? start,
+    DateTime? end,
+    String? categoryId,
+    String? userId,
+  }) {
+    Expression<bool>? condition;
+    condition = id != null ? db.transactions.id.equals(id) : condition;
+    if (amountMin != null) {
+      condition = condition == null
+          ? db.transactions.amount.isBiggerOrEqualValue(amountMin)
+          : condition & db.transactions.amount.isBiggerOrEqualValue(amountMin);
+    }
+    if (amountMax != null) {
+      condition = condition == null
+          ? db.transactions.amount.isSmallerOrEqualValue(amountMax)
+          : condition & db.transactions.amount.isSmallerOrEqualValue(amountMax);
+    }
+    if (type != null) {
+      condition = condition == null
+          ? db.transactions.type.equals(type)
+          : condition & db.transactions.type.equals(type);
+    }
+    if (start != null && end != null) {
+      condition = condition == null
+          ? db.transactions.date.isBetweenValues(start, end)
+          : condition & db.transactions.date.isBetweenValues(start, end);
+    } else if (start != null) {
+      condition = condition == null
+          ? db.transactions.date.isBiggerOrEqualValue(start)
+          : condition & db.transactions.date.isBiggerOrEqualValue(start);
+    } else if (end != null) {
+      condition = condition == null
+          ? db.transactions.date.isSmallerOrEqualValue(end)
+          : condition & db.transactions.date.isSmallerOrEqualValue(end);
+    }
+    if (categoryId != null) {
+      condition = condition == null
+          ? db.transactions.categoryId.equals(categoryId)
+          : condition & db.transactions.categoryId.equals(categoryId);
+    }
+    if (userId != null) {
+      condition = condition == null
+          ? db.transactions.userId.equals(userId)
+          : condition & db.transactions.userId.equals(userId);
+    }
+    return condition;
+  }
+
   Future<List<Transaction>> getByAttribute({
     String? id,
     int? amountMin,
@@ -219,26 +269,19 @@ class TransactionRepo {
     String? userId,
   }) {
     final query = db.select(db.transactions);
-    query.where((c) {
-      Expression<bool>? condition;
-      condition = id != null ? c.id.equals(id) : condition;
-      // if (amountMin != null || amountMax != null) {
-      //   condition = condition == null
-      //       ? c.name.equals(name)
-      //       : condition & c.name.equals(name);
-      // }
-      if (type != null) {
-        condition = condition == null
-            ? c.type.equals(type)
-            : condition & c.type.equals(type);
-      }
-      if (userId != null) {
-        condition = condition == null
-            ? c.userId.equals(userId)
-            : condition & c.userId.equals(userId);
-      }
-      return condition ?? const Constant(false);
-    });
+    final condition = _buildCondition(
+      id: id,
+      amountMin: amountMin,
+      amountMax: amountMax,
+      type: type,
+      start: start,
+      end: end,
+      categoryId: categoryId,
+      userId: userId,
+    );
+    if (condition != null) {
+      query.where((t) => condition);
+    }
     return query.get();
   }
 
@@ -291,12 +334,27 @@ class TransactionRepo {
 
   // UPDATE
   // Future<bool> update({required Category u}) => db.update(db.categories).replace(u);
-  Future<bool> updateT(
+  Future<int> updateT(
     String id, {
     int? amount,
     String? type,
-    DateTime? dateTime,
+    DateTime? date,
+    String? categoryId,
+    String? userId,
   }) {
-    return Future.value(false);
+    final ts = DateTime.now();
+    amount = (amount != null && amount < 0) ? null : amount;
+    return (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
+      TransactionsCompanion(
+        amount: amount != null ? Value(amount) : const Value.absent(),
+        type: type != null ? Value(type) : const Value.absent(),
+        date: date != null ? Value(date) : const Value.absent(),
+        categoryId: categoryId != null
+            ? Value(categoryId)
+            : const Value.absent(),
+        userId: userId != null ? Value(userId) : const Value.absent(),
+        modifiedAt: Value(ts),
+      ),
+    );
   }
 }

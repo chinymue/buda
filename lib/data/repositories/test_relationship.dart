@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 // flutter run -d chrome --web-port 8080 D:\Project\Flutter\buda_mvp\lib\data\repositories\test_relationship.dart
 // flutter run -d window D:\Project\Flutter\buda_mvp\lib\data\repositories\test_relationship.dart
 import 'package:flutter/widgets.dart';
@@ -27,12 +28,9 @@ class TestResult {
     required this.timestramp,
   });
 
-  TestResult.defaultTestResult(
-    this.name,
-    this.detail,
-    this.explain,
-    this.result,
-  ) : timestramp = DateTime.now();
+  TestResult.defaultTestResult(this.name, this.detail, this.result)
+    : explain = '',
+      timestramp = DateTime.now();
 
   String toStr() =>
       "test result: {name: $name, detail: $detail, explain: $explain, result: $result, timestramp: $timestramp}";
@@ -47,6 +45,27 @@ Future<void> main() async {
   Future.delayed(const Duration(seconds: 3));
   // TODO: Add summary test
   List<TestResult> summary = [];
+  void updateSummary({
+    required String name,
+    required String detail,
+    String explain = '',
+    required bool result,
+  }) {
+    late final TestResult testResult;
+    testResult = explain.isEmpty
+        ? TestResult.defaultTestResult(name, detail, result)
+        : TestResult(
+            name: name,
+            detail: detail,
+            explain: explain,
+            result: result,
+            timestramp: DateTime.now(),
+          );
+
+    summary.add(testResult);
+    print(testResult.toStr());
+  }
+
   // ==================================================================
   // ========= TEST RELATIONSHIP USER -> CATEGORY =====================
   // ==================================================================
@@ -54,11 +73,12 @@ Future<void> main() async {
   print('${'-' * 15} [PRE-CHECK FK KEYS] ${'-' * 15}');
   final fkStatus = await db.customSelect('PRAGMA foreign_keys').getSingle();
   final enabled = fkStatus.data['foreign_keys'] == 1;
-  if (!enabled) {
-    print('FAIL: SQLite foreign-key enforcement is disabled.');
-  } else {
-    print('PASS: SQLite foreign-key enforcement is enabled.');
-  }
+  final String n1 = 'SQLite foreign-key enforcement';
+  final bool r1 = enabled;
+  final String d1 =
+      'SQLite foreign-key enforcement is ${enabled ? 'enabled' : 'disabled'}.';
+  updateSummary(name: n1, detail: d1, result: r1);
+  print('${r1 ? 'PASS' : 'FAIL'}: $d1');
   print('FOREIGN KEY STATUS: ${fkStatus.data['foreign_keys']}');
   final categoryFks = await db
       .customSelect('PRAGMA foreign_key_list(categories)')
@@ -81,6 +101,9 @@ Future<void> main() async {
     '\n${'=' * 80}\n${' ' * 15}[START] TEST RELATIONSHIP: USER -> CATEGORY\n${'=' * 80}\n',
   );
   print('\n${'-' * 80}\n[RELATIONSHIP - VALID FK]\n${'-' * 80}\n');
+  final n2 = 'Create User and Category with valid foreign key';
+  late final String d2;
+  late final bool r2;
   await uRepo.createUser(id: userIdFKTest, username: userNameFKTest);
   final result = await cRepo.createCategory(
     id: categoryIdFKTest,
@@ -90,10 +113,16 @@ Future<void> main() async {
   );
   final category = await cRepo.getById(categoryIdFKTest);
   if (result > 0 && category != null && category.userId == userIdFKTest) {
-    print('PASS: Category references existing User.');
+    r2 = true;
+    d2 = 'Category created with valid foreign key.';
   } else {
-    print('FAIL: Valid foreign key relationship is incorrect.');
+    r2 = false;
+    d2 = 'Failed to create category with valid foreign key.';
   }
+  print('${r2 ? 'PASS' : 'FAIL'}: $d2');
+  updateSummary(name: n2, detail: d2, result: r2);
+  // TODO: continue here, still add summary for each test case
+  // TODO: add test for transaction table, which has a foreign key to category table
   print('\n${'-' * 80}\n[RELATIONSHIP - MISING PARENT]\n${'-' * 80}\n');
   try {
     await cRepo.createCategory(
