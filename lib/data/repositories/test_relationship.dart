@@ -45,6 +45,7 @@ Future<void> main() async {
   Future.delayed(const Duration(seconds: 3));
   // TODO: Add summary test
   List<TestResult> summary = [];
+
   void updateSummary({
     required String name,
     required String detail,
@@ -64,6 +65,20 @@ Future<void> main() async {
 
     summary.add(testResult);
     print(testResult.toStr());
+  }
+
+  void printSummary() {
+    var cnt = 0;
+    for (final testResult in summary) {
+      if (!testResult.result) {
+        print(testResult.toStr());
+      } else {
+        cnt++;
+      }
+    }
+    print(
+      'Summary: ${summary.length} tests, $cnt passed, ${summary.length - cnt} failed.',
+    );
   }
 
   // ==================================================================
@@ -100,10 +115,10 @@ Future<void> main() async {
   print(
     '\n${'=' * 80}\n${' ' * 15}[START] TEST RELATIONSHIP: USER -> CATEGORY\n${'=' * 80}\n',
   );
-  print('\n${'-' * 80}\n[RELATIONSHIP - VALID FK]\n${'-' * 80}\n');
-  final n2 = 'Create User and Category with valid foreign key';
+  final n2 = 'RELATIONSHIP - VALID FK';
   late final String d2;
   late final bool r2;
+  print('\n${'-' * 80}\n[$n2]\n${'-' * 80}\n');
   await uRepo.createUser(id: userIdFKTest, username: userNameFKTest);
   final result = await cRepo.createCategory(
     id: categoryIdFKTest,
@@ -123,7 +138,10 @@ Future<void> main() async {
   updateSummary(name: n2, detail: d2, result: r2);
   // TODO: continue here, still add summary for each test case
   // TODO: add test for transaction table, which has a foreign key to category table
-  print('\n${'-' * 80}\n[RELATIONSHIP - MISING PARENT]\n${'-' * 80}\n');
+  final n3 = 'RELATIONSHIP - MISING PARENT';
+  late final String d3, e3;
+  late final bool r3;
+  print('\n${'-' * 80}\n[$n3]\n${'-' * 80}\n');
   try {
     await cRepo.createCategory(
       id: categoryIdMisingTest,
@@ -131,32 +149,54 @@ Future<void> main() async {
       type: 'expense',
       userId: missingUserId,
     );
-    print('FAIL: Category was inserted with a non-existing userId.');
+    r3 = false;
+    d3 = 'Category was inserted with a non-existing userId.';
+    e3 = 'No exception was thrown for invalid foreign key.';
   } catch (e) {
-    print('PASS: Invalid foreign key was rejected.\nException: $e');
+    r3 = true;
+    d3 = 'Invalid foreign key was rejected.';
+    e3 = e.toString();
   }
-  print('\n${'-' * 80}\n[RELATIONSHIP - DELETE PARENT]\n${'-' * 80}\n');
+  print('${r3 ? 'PASS' : 'FAIL'}: $d3\nException: $e3');
+  updateSummary(name: n3, detail: d3, explain: e3, result: r3);
+  final n4 = 'RELATIONSHIP - DELETE PARENT';
+  late final String d4, e4;
+  late final bool r4;
+  print('\n${'-' * 80}\n[$n4]\n${'-' * 80}\n');
   try {
     await uRepo.deleteById(id: userIdFKTest);
-    print('FAIL: Parent User was deleted while Categories still reference it.');
+    r4 = false;
+    d4 = 'Parent User was deleted while Categories still reference it.';
+    e4 = 'No exception was thrown for deleting parent with existing child records.';
   } catch (e) {
-    print(
-      'PASS: Parent deletion was rejected because child records exist.\nException: $e',
-    );
+    r4 = true;
+    d4 = 'Parent deletion was rejected because child records exist.';
+    e4 = e.toString();
   }
-  print('\n${'-' * 80}\n[RELATIONSHIP - ORPHANS CHECK]\n${'-' * 80}\n');
+  print('${r4 ? 'PASS' : 'FAIL'}: $d4\nException: $e4');
+  final n5 = 'RELATIONSHIP - ORPHANS CHECK';
+  late final String d5;
+  late final bool r5;
+  print('\n${'-' * 80}\n[$n5]\n${'-' * 80}\n');
   var orphanCount = 0;
   final categories = await cRepo.getAll();
   for (final category in categories) {
     final user = await uRepo.getById(category.userId);
     if (user == null) {
+      r5 = false;
+      d5 = d5.isEmpty
+          ? 'Orphan Category found: ${category.id}'
+          : '$d5, ${category.id}';
       print('FAIL: Orphan Category found: ${category.id}');
       orphanCount++;
     }
   }
   if (orphanCount == 0) {
-    print('PASS: No Orphan Category found');
+    r5 = true;
+    d5 = 'No Orphan Category found.';
   }
+  print('${r5 ? 'PASS' : 'FAIL'}: $d5');
+  updateSummary(name: n5, detail: d5, result: r5);
   print(
     '\n${'=' * 80}\n${' ' * 15}[END] TEST RELATIONSHIP: USER -> CATEGORY\n${'=' * 80}\n',
   );
@@ -174,4 +214,5 @@ Future<void> main() async {
   // CLOSE DATABASE
   // ============================================================
   await db.close();
+  printSummary();
 }
