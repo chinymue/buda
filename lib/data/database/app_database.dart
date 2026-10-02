@@ -9,7 +9,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase()
     : super(
         driftDatabase(
-          name: 'budget_app',
+          name: 'budget_app_v0.1.3.db',
           web: DriftWebOptions(
             sqlite3Wasm: Uri.parse('sqlite3.wasm'),
             driftWorker: Uri.parse('drift_worker.dart.js'),
@@ -18,10 +18,13 @@ class AppDatabase extends _$AppDatabase {
       );
   // AppDatabase.test() : super(NativeDatabase.memory());
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
     onCreate: (m) async {
       await m.createAll();
     },
@@ -30,9 +33,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(categories);
         await m.createTable(transactions);
       }
-    },
-    beforeOpen: (details) async {
-      await customStatement('PRAGMA foreign_keys = ON');
+      if (from < 3) {
+        // Handle migration from version 2 to 3
+        await m.addColumn(transactions, transactions.createdAt);
+        await m.addColumn(transactions, transactions.modifiedAt);
+      }
     },
   );
 }
