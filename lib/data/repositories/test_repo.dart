@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../database/app_database.dart';
+import '../../utils/test_result_helper.dart';
 import 'repo.dart';
 
 // User repo data test
@@ -46,6 +47,7 @@ Future<void> main() async {
   final db = AppDatabase();
   final uRepo = UserRepo(db: db);
   final cRepo = CategoryRepo(db: db);
+  final testResults = TestResultHelper();
   // ============================================================
   // ============================================================
   // A. USER REPO TEST
@@ -57,14 +59,10 @@ Future<void> main() async {
   // ============================================================
   print('\n${'=' * 80}\n1. CHECK EMPTY / CURRENT STATE\n${'=' * 80}');
   final currentUsers = await uRepo.getAll();
-  print('Current user count: ${currentUsers.length}');
   if (currentUsers.isEmpty) {
-    print('PASS: Database currently has no users.');
+    print('INFO: Database currently has no users.');
   } else {
-    print('INFO: Database already contains users:');
-    for (final user in currentUsers) {
-      print('  $user');
-    }
+    print('INFO: Database already contains ${currentUsers.length} users.');
   }
   // ============================================================
   // 2. SINGLE RECORD CRUD
@@ -76,54 +74,47 @@ Future<void> main() async {
   print('\n[CREATE]');
   final result = await uRepo.createUser(id: singleId, username: singleUsername);
 
-  print('Insert result: $result');
-
   final createdUser = await uRepo.getById(singleId);
-
   final usersAfterInsert = await uRepo.getAll();
 
-  if (result > 0 &&
-      createdUser != null &&
-      createdUser.id == singleId &&
-      createdUser.username == singleUsername &&
-      usersAfterInsert.length == currentUsers.length + 1) {
-    print('PASS: Category created.');
-    print('Created category: $createdUser');
-  } else {
-    print(
-      'FAIL: Category creation failed.\n'
-      'Insert result: $result\n'
-      'Created category: $createdUser\n'
-      'Category count before: ${currentUsers.length}\n'
-      'Category count after: ${usersAfterInsert.length}',
-    );
-  }
+  testResults.record(
+    name: 'Create user',
+    passed:
+        result > 0 &&
+        createdUser != null &&
+        createdUser.id == singleId &&
+        createdUser.username == singleUsername &&
+        usersAfterInsert.length == currentUsers.length + 1,
+    failureDetail:
+        'Insert result: $result; user: $createdUser; '
+        'count: ${currentUsers.length} -> ${usersAfterInsert.length}.',
+  );
   // ------------------------------------------------------------
   // READ BY ID
   // ------------------------------------------------------------
   print('\n[READ BY ID]');
   final singleUser = await uRepo.getById(singleId);
-  if (singleUser != null &&
-      singleUser.id == singleId &&
-      singleUser.username == singleUsername) {
-    print('PASS: getById returned correct user.\nUser: $singleUser');
-  } else {
-    print('FAIL: getById returned unexpected result.\nResult: $singleUser');
-  }
+  testResults.record(
+    name: 'Read user by ID',
+    passed:
+        singleUser != null &&
+        singleUser.id == singleId &&
+        singleUser.username == singleUsername,
+    failureDetail: 'Unexpected result: $singleUser.',
+  );
   // ------------------------------------------------------------
   // READ BY NAME
   // ------------------------------------------------------------
   print('\n[READ BY NAME]');
   final singleUserByName = await uRepo.getByName(singleUsername);
-  if (singleUserByName != null &&
-      singleUserByName.id == singleId &&
-      singleUserByName.username == singleUsername) {
-    print('PASS: getByName returned correct user.');
-  } else {
-    print(
-      'FAIL: getByName returned unexpected result.\nResult: $singleUserByName',
-    );
-  }
+  testResults.record(
+    name: 'Read user by name',
+    passed:
+        singleUserByName != null &&
+        singleUserByName.id == singleId &&
+        singleUserByName.username == singleUsername,
+    failureDetail: 'Unexpected result: $singleUserByName.',
+  );
   // ------------------------------------------------------------
   // UPDATE
   // ------------------------------------------------------------
@@ -133,27 +124,27 @@ Future<void> main() async {
     id: singleId,
     username: updatedUsername,
   );
-  print('Update result: $updateResult');
   final updatedUser = await uRepo.getById(singleId);
-  if (updateResult == 1 &&
-      updatedUser != null &&
-      updatedUser.username == updatedUsername) {
-    print('PASS: User updated correctly.\nUser: $updatedUser');
-  } else {
-    print('FAIL: User update failed.\nUser: $updatedUser');
-  }
+  testResults.record(
+    name: 'Update user',
+    passed:
+        updateResult == 1 &&
+        updatedUser != null &&
+        updatedUser.username == updatedUsername,
+    failureDetail: 'Update result: $updateResult; user: $updatedUser.',
+  );
   // ------------------------------------------------------------
   // DELETE
   // ------------------------------------------------------------
   print('\n[DELETE]');
   final deleteResult = await uRepo.deleteById(id: singleId);
-  print('Delete result: $deleteResult');
   final deletedUser = await uRepo.getById(singleId);
-  if (deleteResult == 1 && deletedUser == null) {
-    print('PASS: User deleted correctly.');
-  } else {
-    print('FAIL: User delete failed.\nResult after delete: $deletedUser');
-  }
+  testResults.record(
+    name: 'Delete user',
+    passed: deleteResult == 1 && deletedUser == null,
+    failureDetail:
+        'Delete result: $deleteResult; remaining user: $deletedUser.',
+  );
   // ============================================================
   // 3. MULTI RECORDS
   // ============================================================
@@ -169,12 +160,11 @@ Future<void> main() async {
   final multiFound = allAfterMultiInsert
       .where((user) => user.id.startsWith('test_multi_'))
       .toList();
-  print('Multi-test user count: ${multiFound.length}');
-  if (multiFound.length == 3) {
-    print('PASS: 3 records created.');
-  } else {
-    print('FAIL: Expected 3 records.');
-  }
+  testResults.record(
+    name: 'Create multiple users',
+    passed: multiFound.length == 3,
+    failureDetail: 'Expected 3 users, found ${multiFound.length}.',
+  );
   print('\n[UPDATE ONE RECORD]');
   final updateMultiResult = await uRepo.updateUser(
     id: 'test_multi_002',
@@ -183,27 +173,32 @@ Future<void> main() async {
   final multiAlice = await uRepo.getById('test_multi_001');
   final multiBob = await uRepo.getById('test_multi_002');
   final multiCharlie = await uRepo.getById('test_multi_003');
-  if (updateMultiResult == 1 &&
-      multiAlice?.username == 'multi_alice' &&
-      multiBob?.username == 'multi_bob_updated' &&
-      multiCharlie?.username == 'multi_charlie') {
-    print('PASS: Updating one record did not affect other records.');
-  } else {
-    print('FAIL: Multi-record update behavior is incorrect.');
-  }
+  testResults.record(
+    name: 'Update one user without affecting other users',
+    passed:
+        updateMultiResult == 1 &&
+        multiAlice?.username == 'multi_alice' &&
+        multiBob?.username == 'multi_bob_updated' &&
+        multiCharlie?.username == 'multi_charlie',
+    failureDetail: 'User records do not match expected values.',
+  );
   print('\n[DELETE ONE RECORD]');
   final deleteMultiResult = await uRepo.deleteById(id: 'test_multi_002');
   final remainingAlice = await uRepo.getById('test_multi_001');
   final deletedBob = await uRepo.getById('test_multi_002');
   final remainingCharlie = await uRepo.getById('test_multi_003');
-  if (deleteMultiResult == 1 &&
-      remainingAlice != null &&
-      deletedBob == null &&
-      remainingCharlie != null) {
-    print('PASS: Deleting one record did not affect other records.');
-  } else {
-    print('FAIL: Multi-record delete behavior is incorrect.');
-  }
+  testResults.record(
+    name: 'Delete one user without affecting other users',
+    passed:
+        deleteMultiResult == 1 &&
+        remainingAlice != null &&
+        deletedBob == null &&
+        remainingCharlie != null,
+    failureDetail:
+        'Delete result: $deleteMultiResult; '
+        'remaining Alice: $remainingAlice; deleted Bob: $deletedBob; '
+        'remaining Charlie: $remainingCharlie.',
+  );
   await uRepo.deleteById(id: 'test_multi_001');
   await uRepo.deleteById(id: 'test_multi_003');
   // ============================================================
@@ -212,26 +207,26 @@ Future<void> main() async {
   print('\n${'=' * 80}\n4. CHECK MISSING ID\n${'=' * 80}');
   const missingId = 'test_missing_999';
   final missingUser = await uRepo.getById(missingId);
-  if (missingUser == null) {
-    print('PASS: getById returned null for missing ID.');
-  } else {
-    print('FAIL: Expected null.\nResult: $missingUser');
-  }
+  testResults.record(
+    name: 'Read user by missing ID',
+    passed: missingUser == null,
+    failureDetail: 'Unexpected result: $missingUser.',
+  );
   final updateMissingResult = await uRepo.updateUser(
     id: missingId,
     username: 'should_not_exist',
   );
-  if (updateMissingResult == 0) {
-    print('PASS: update missing ID returned 0.');
-  } else {
-    print('FAIL: Expected update result = 0.');
-  }
+  testResults.record(
+    name: 'Update user with missing ID',
+    passed: updateMissingResult == 0,
+    failureDetail: 'Expected 0 affected rows, got $updateMissingResult.',
+  );
   final deleteMissingResult = await uRepo.deleteById(id: missingId);
-  if (deleteMissingResult == 0) {
-    print('PASS: delete missing ID returned 0.');
-  } else {
-    print('FAIL: Expected delete result = 0.');
-  }
+  testResults.record(
+    name: 'Delete user with missing ID',
+    passed: deleteMissingResult == 0,
+    failureDetail: 'Expected 0 affected rows, got $deleteMissingResult.',
+  );
   // ============================================================
   // 5. DUPLICATE CONSTRAINTS
   // ============================================================
@@ -241,16 +236,20 @@ Future<void> main() async {
   print('\n[DUPLICATE ID]');
   try {
     await uRepo.createUser(id: duplicateId, username: 'duplicate_user_2');
-    print('FAIL: Duplicate ID was accepted.');
-  } catch (e) {
-    print('PASS: Duplicate ID rejected.\nException: $e');
+    testResults.record(
+      name: 'Reject duplicate user ID',
+      passed: false,
+      failureDetail: 'Duplicate ID was accepted.',
+    );
+  } catch (_) {
+    testResults.record(name: 'Reject duplicate user ID', passed: true);
   }
   final duplicateIdUser = await uRepo.getById(duplicateId);
-  if (duplicateIdUser?.username == 'duplicate_user_1') {
-    print('PASS: Original record remained unchanged.');
-  } else {
-    print('FAIL: Original record was modified unexpectedly.');
-  }
+  testResults.record(
+    name: 'Preserve original user after duplicate insert',
+    passed: duplicateIdUser?.username == 'duplicate_user_1',
+    failureDetail: 'Unexpected original user: $duplicateIdUser.',
+  );
   await uRepo.deleteById(id: duplicateId);
   // ============================================================
   // 6. PERSISTENCE
@@ -261,20 +260,36 @@ Future<void> main() async {
     print('Persistence data: NOT FOUND\nCreating persistence test data...');
     try {
       final result = await uRepo.createUser(id: testId, username: testUsername);
-      print('Insert result: $result');
       final createdUser = await uRepo.getById(testId);
+      testResults.record(
+        name: 'Create user persistence data',
+        passed:
+            result > 0 &&
+            createdUser != null &&
+            createdUser.id == testId &&
+            createdUser.username == testUsername,
+        failureDetail: 'Insert result: $result; user: $createdUser.',
+      );
       print(
         'Created persistence data:\nUser: $createdUser\n\nIMPORTANT:\nClose the program and run this test again.\nThe second run should show:\nPersistence data: FOUND',
       );
     } catch (e) {
-      print('FAIL: Unexpected exception: $e');
+      testResults.record(
+        name: 'Create user persistence data',
+        passed: false,
+        failureDetail: 'Unexpected exception: $e',
+      );
     }
   } else {
-    print('PASS: Persistence data FOUND.\nUser: $persistedUser');
+    testResults.record(name: 'Find persisted user', passed: true);
     if (persistedUser.id == testId && persistedUser.username == testUsername) {
-      print('PASS: Persisted data is correct.');
+      testResults.record(name: 'Validate persisted user', passed: true);
     } else {
-      print('FAIL: Persisted data is incorrect.');
+      testResults.record(
+        name: 'Validate persisted user',
+        passed: false,
+        failureDetail: 'Unexpected persisted user: $persistedUser.',
+      );
     }
   }
   print('\n${'=' * 80}\n=== USER REPO TEST END ===\n${'=' * 80}');
@@ -308,14 +323,12 @@ Future<void> main() async {
   await cRepo.deleteById(id: categorySingleId);
   print('Previous test category removed if existed.');
   final currentCategories = await cRepo.getAll();
-  print('Current categories count: ${currentCategories.length}');
   if (currentCategories.isEmpty) {
-    print('PASS: Database currently has no categories.');
+    print('INFO: Database currently has no categories.');
   } else {
-    print('INFO: Database already contains categories:');
-    for (final c in currentCategories) {
-      print('  $c');
-    }
+    print(
+      'INFO: Database already contains ${currentCategories.length} categories.',
+    );
   }
   print('\n[CREATE]');
   final result1 = await cRepo.createCategory(
@@ -325,93 +338,77 @@ Future<void> main() async {
     userId: categoryTestUserId,
   );
 
-  print('Insert result: $result1');
-
   final createdCategory = await cRepo.getById(categorySingleId);
-
   final categoriesAfterInsert = await cRepo.getAll();
 
-  if (result1 > 0 &&
-      createdCategory != null &&
-      createdCategory.id == categorySingleId &&
-      createdCategory.name == categorySingleName &&
-      createdCategory.type == categorySingleType &&
-      createdCategory.userId == categoryTestUserId &&
-      categoriesAfterInsert.length == currentCategories.length + 1) {
-    print('PASS: Category created.');
-    print('Created category: $createdCategory');
-  } else {
-    print(
-      'FAIL: Category creation failed.\n'
-      'Insert result: $result1\n'
-      'Created category: $createdCategory\n'
-      'Category count before: ${currentCategories.length}\n'
-      'Category count after: ${categoriesAfterInsert.length}',
-    );
-  }
+  testResults.record(
+    name: 'Create category',
+    passed:
+        result1 > 0 &&
+        createdCategory != null &&
+        createdCategory.id == categorySingleId &&
+        createdCategory.name == categorySingleName &&
+        createdCategory.type == categorySingleType &&
+        createdCategory.userId == categoryTestUserId &&
+        categoriesAfterInsert.length == currentCategories.length + 1,
+    failureDetail:
+        'Insert result: $result1; category: $createdCategory; '
+        'count: ${currentCategories.length} -> ${categoriesAfterInsert.length}.',
+  );
   print('\n[READ BY ID]');
   final categoryById = await cRepo.getById(categorySingleId);
-  if (categoryById != null &&
-      categoryById.id == categorySingleId &&
-      categoryById.name == categorySingleName &&
-      categoryById.type == categorySingleType &&
-      categoryById.userId == categoryTestUserId) {
-    print(
-      'PASS: getById returned correct category.\n'
-      'Category: $categoryById',
-    );
-  } else {
-    print(
-      'FAIL: getById returned unexpected result.\n'
-      'Result: $categoryById',
-    );
-  }
+  testResults.record(
+    name: 'Read category by ID',
+    passed:
+        categoryById != null &&
+        categoryById.id == categorySingleId &&
+        categoryById.name == categorySingleName &&
+        categoryById.type == categorySingleType &&
+        categoryById.userId == categoryTestUserId,
+    failureDetail: 'Unexpected result: $categoryById.',
+  );
   print('\n[READ BY NAME]');
   final categoryByName = await cRepo.getByName(categorySingleName);
-  if (categoryByName != null &&
-      categoryByName.id == categorySingleId &&
-      categoryByName.name == categorySingleName) {
-    print('PASS: getByName returned correct category.');
-  } else {
-    print(
-      'FAIL: getByName returned unexpected result.\n'
-      'Result: $categoryByName',
-    );
-  }
+  testResults.record(
+    name: 'Read category by name',
+    passed:
+        categoryByName != null &&
+        categoryByName.id == categorySingleId &&
+        categoryByName.name == categorySingleName,
+    failureDetail: 'Unexpected result: $categoryByName.',
+  );
   print('\n[READ BY TYPE]');
   final expenseCategories = await cRepo.getByType(categorySingleType);
   final foundByType = expenseCategories.any(
     (category) => category.id == categorySingleId,
   );
-  if (foundByType) {
-    print('PASS: getByType returned the expected category.');
-  } else {
-    print('FAIL: getByType did not return the expected category');
-  }
+  testResults.record(
+    name: 'Filter categories by type',
+    passed: foundByType,
+    failureDetail: 'Expected category $categorySingleId in type results.',
+  );
   print('\n[READ BY USER ID]');
   final userCategories = await cRepo.getByUserId(categoryTestUserId);
   final foundByUserId = userCategories.any(
     (category) => category.id == categorySingleId,
   );
-  if (foundByUserId) {
-    print('PASS: getByUserId returned the expected category.');
-  } else {
-    print('FAIL: getByUserId did not return the expected category.');
-  }
+  testResults.record(
+    name: 'Filter categories by user ID',
+    passed: foundByUserId,
+    failureDetail: 'Expected category $categorySingleId in user results.',
+  );
   print('\n[READ BY USER ID + NAME]');
   final userNameCategories = await cRepo.getByUserIdAndName(
     categoryTestUserId,
     categorySingleName,
   );
-  if (userNameCategories.length == 1 &&
-      userNameCategories.first.id == categorySingleId) {
-    print('PASS: getByUserIdAndName returned correct category.');
-  } else {
-    print(
-      'FAIL: getByUserIdAndName returned unexpected result.\n'
-      'Result: $userNameCategories',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by user ID and name',
+    passed:
+        userNameCategories.length == 1 &&
+        userNameCategories.first.id == categorySingleId,
+    failureDetail: 'Unexpected result: $userNameCategories.',
+  );
   print('\n[READ BY USER ID + TYPE]');
   final userTypeCategories = await cRepo.getByUserIdAndType(
     categoryTestUserId,
@@ -420,46 +417,38 @@ Future<void> main() async {
   final foundByUserAndType = userTypeCategories.any(
     (category) => category.id == categorySingleId,
   );
-  if (foundByUserAndType) {
-    print('PASS: getByUserIdAndType returned correct category.');
-  } else {
-    print('FAIL: getByUserIdAndType did not return expected category.');
-  }
+  testResults.record(
+    name: 'Filter categories by user ID and type',
+    passed: foundByUserAndType,
+    failureDetail: 'Expected category $categorySingleId in filtered results.',
+  );
   print('\n[UPDATE]');
   final updateCategoryResult = await cRepo.updateCategory(
     id: categorySingleId,
     name: updatedCategoryName,
     type: updatedCategoryType,
   );
-  print('Update result: $updateCategoryResult');
   final updatedCategory = await cRepo.getById(categorySingleId);
-  if (updateResult == 1 &&
-      updatedCategory != null &&
-      updatedCategory.name == updatedCategoryName &&
-      updatedCategory.type == updatedCategoryType &&
-      updatedCategory.userId == categoryTestUserId) {
-    print(
-      'PASS: Category updated correctly.\n'
-      'Category: $updatedCategory',
-    );
-  } else {
-    print(
-      'FAIL: Category update failed.\n'
-      'Category: $updatedCategory',
-    );
-  }
+  testResults.record(
+    name: 'Update category',
+    passed:
+        updateCategoryResult == 1 &&
+        updatedCategory != null &&
+        updatedCategory.name == updatedCategoryName &&
+        updatedCategory.type == updatedCategoryType &&
+        updatedCategory.userId == categoryTestUserId,
+    failureDetail:
+        'Update result: $updateCategoryResult; category: $updatedCategory.',
+  );
   print('\n[DELETE]');
   final deleteCategoryResult = await cRepo.deleteById(id: categorySingleId);
-  print('Delete result: $deleteCategoryResult');
   final deletedCategory = await cRepo.getById(categorySingleId);
-  if (deleteResult == 1 && deletedCategory == null) {
-    print('PASS: Category deleted correctly.');
-  } else {
-    print(
-      'FAIL: Category delete failed.\n'
-      'Result after delete: $deletedCategory',
-    );
-  }
+  testResults.record(
+    name: 'Delete category',
+    passed: deleteCategoryResult == 1 && deletedCategory == null,
+    failureDetail:
+        'Delete result: $deleteCategoryResult; remaining category: $deletedCategory.',
+  );
   // ============================================================
   // 2. CATEGORY MULTI RECORDS + FILTER
   // ============================================================
@@ -485,58 +474,60 @@ Future<void> main() async {
       type: category.$3,
       userId: category.$4,
     );
-    print('${category.$1}: insert result = $result');
+    if (result <= 0) {
+      testResults.record(
+        name: 'Create category ${category.$1}',
+        passed: false,
+        failureDetail: 'Insert returned $result.',
+      );
+    }
   }
   print('\n[GET ALL]');
   final allCategories = await cRepo.getAll();
   final multiCategoriesFound = allCategories
       .where((c) => c.id.startsWith('test_category_multi_'))
       .toList();
-  print('Multi-test category count: ${multiCategoriesFound.length}');
-  if (multiCategoriesFound.length == 4) {
-    print('PASS: 4 categories created.');
-  } else {
-    print('FAIL: Expected 4 categories.');
-    print('Result: $multiCategoriesFound');
-  }
+  testResults.record(
+    name: 'Create multiple categories',
+    passed: multiCategoriesFound.length == 4,
+    failureDetail:
+        'Expected 4 categories, found ${multiCategoriesFound.length}: '
+        '$multiCategoriesFound.',
+  );
   print('\n[FILTER BY TYPE]');
   final expenseResult = await cRepo.getByType('expense');
   final expenseMultiFound = expenseResult
       .where((c) => c.id.startsWith('test_category_multi_'))
       .toList();
-  if (expenseMultiFound.length == 3) {
-    print('PASS: getByType returned 3 expense categories.');
-  } else {
-    print(
-      'FAIL: Expected 3 expense categories, got ${expenseMultiFound.length}.',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by type',
+    passed: expenseMultiFound.length == 3,
+    failureDetail:
+        'Expected 3 expense categories, found ${expenseMultiFound.length}.',
+  );
   print('\n[FILTER BY USER ID]');
   final userResult = await cRepo.getByUserId(categoryTestUserId);
   final userMultiFound = userResult
       .where((c) => c.id.startsWith('test_category_multi_'))
       .toList();
-  if (userMultiFound.length == 3) {
-    print('PASS: getByUserId returned 3 categories');
-  } else {
-    print(
-      'FAIL: Expected 3 categories for test user, got ${userMultiFound.length}.',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by user ID',
+    passed: userMultiFound.length == 3,
+    failureDetail:
+        'Expected 3 categories for test user, found ${userMultiFound.length}.',
+  );
   print('\n[FILTER BY USER ID + NAME]');
   final userNameResult = await cRepo.getByUserIdAndName(
     categoryTestUserId,
     'Food',
   );
-  if (userNameResult.length == 1 &&
-      userNameResult.first.id == 'test_category_multi_001') {
-    print('PASS: getByUserIdAndName returned correct result.');
-  } else {
-    print(
-      'FAIL: getByUserIdAndName returned unexpected result.\n'
-      'Result: $userNameResult',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by user ID and name',
+    passed:
+        userNameResult.length == 1 &&
+        userNameResult.first.id == 'test_category_multi_001',
+    failureDetail: 'Unexpected result: $userNameResult.',
+  );
   print('\n[FILTER BY USER ID + TYPE]');
   final userTypeResult = await cRepo.getByUserIdAndType(
     categoryTestUserId,
@@ -550,35 +541,27 @@ Future<void> main() async {
       .map((c) => c.id)
       .where((id) => id.startsWith('test_category_multi_'))
       .toSet();
-  if (setEquals(actualUserTypeIds, expectedUserTypeIds)) {
-    print('PASS: getByUserIdAndType returned correct results.');
-  } else {
-    print(
-      'FAIL: getByUserIdAndType returned unexpected results.\n'
-      'Result: $actualUserTypeIds',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by user ID and type',
+    passed: setEquals(actualUserTypeIds, expectedUserTypeIds),
+    failureDetail: 'Unexpected category IDs: $actualUserTypeIds.',
+  );
   print('\n${'=' * 80}\nCATEGORY getByAttribute\n${'=' * 80}');
   print('\n[ATTRIBUTE: ID]');
   final attrById = await cRepo.getByAttribute(id: 'test_category_multi_001');
-  if (attrById.length == 1 && attrById.first.id == 'test_category_multi_001') {
-    print('PASS: getByAttribute(id) works.');
-  } else {
-    print(
-      'FAIL: getByAttribute(id) returned unexpected result.\n'
-      'Result: $attrById',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by ID attribute',
+    passed:
+        attrById.length == 1 && attrById.first.id == 'test_category_multi_001',
+    failureDetail: 'Unexpected result: $attrById.',
+  );
   print('\n[ATTRIBUTE: NAME]');
   final attrByName = await cRepo.getByAttribute(name: 'Food');
-  if (attrByName.length == 1 && attrByName.first.name == 'Food') {
-    print('PASS: getByAttribute(name) works.');
-  } else {
-    print(
-      'FAIL: getByAttribute(name) returned unexpected result.\n'
-      'Result: $attrByName',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by name attribute',
+    passed: attrByName.length == 1 && attrByName.first.name == 'Food',
+    failureDetail: 'Unexpected result: $attrByName.',
+  );
   print('\n[ATTRIBUTE: TYPE]');
   final attrByType = await cRepo.getByAttribute(type: 'expense');
   final attrExpenseIds = attrByType
@@ -590,14 +573,11 @@ Future<void> main() async {
     'test_category_multi_003',
     'test_category_multi_004',
   };
-  if (setEquals(attrExpenseIds, expectedExpenseIds)) {
-    print('PASS: getByAttribute(type) works.');
-  } else {
-    print(
-      'FAIL: getByAttribute(type) returned unexpected result.\n'
-      'Result: $attrExpenseIds',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by type attribute',
+    passed: setEquals(attrExpenseIds, expectedExpenseIds),
+    failureDetail: 'Unexpected category IDs: $attrExpenseIds.',
+  );
   print('\n[ATTRIBUTE: USER ID]');
   final attrByUserId = await cRepo.getByAttribute(userId: categoryTestUserId);
   final attrUserIds = attrByUserId
@@ -609,14 +589,11 @@ Future<void> main() async {
     'test_category_multi_002',
     'test_category_multi_003',
   };
-  if (setEquals(attrUserIds, expectedUserIds)) {
-    print('PASS: getByAttribute(userId) works.');
-  } else {
-    print(
-      'FAIL: getByAttribute(userId) returned unexpected result.\n'
-      'Result: $attrUserIds',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by user ID attribute',
+    passed: setEquals(attrUserIds, expectedUserIds),
+    failureDetail: 'Unexpected category IDs: $attrUserIds.',
+  );
   print('\n[ATTRIBUTE: USER ID + TYPE]');
   final attrByUserAndType = await cRepo.getByAttribute(
     userId: categoryTestUserId,
@@ -626,41 +603,33 @@ Future<void> main() async {
       .where((category) => category.id.startsWith('test_category_multi_'))
       .map((category) => category.id)
       .toSet();
-  if (setEquals(attrUserTypeIds, expectedUserTypeIds)) {
-    print('PASS: getByAttribute(userId + type) works.');
-  } else {
-    print(
-      'FAIL: getByAttribute(userId + type) returned '
-      'unexpected result.\nResult: $attrUserTypeIds',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by user ID and type attributes',
+    passed: setEquals(attrUserTypeIds, expectedUserTypeIds),
+    failureDetail: 'Unexpected category IDs: $attrUserTypeIds.',
+  );
   print('\n[ATTRIBUTE: USER ID + NAME + TYPE]');
   final attrAll = await cRepo.getByAttribute(
     userId: categoryTestUserId,
     name: 'Food',
     type: 'expense',
   );
-  if (attrAll.length == 1 && attrAll.first.id == 'test_category_multi_001') {
-    print('PASS: getByAttribute(all attributes) works.');
-  } else {
-    print(
-      'FAIL: getByAttribute(all attributes) returned '
-      'unexpected result.\nResult: $attrAll',
-    );
-  }
+  testResults.record(
+    name: 'Filter categories by all attributes',
+    passed:
+        attrAll.length == 1 && attrAll.first.id == 'test_category_multi_001',
+    failureDetail: 'Unexpected result: $attrAll.',
+  );
   print('\n[ATTRIBUTE: NO ATTRIBUTE]');
   final attrNone = await cRepo.getByAttribute();
   final attrNoneTestCategories = attrNone
       .where((category) => category.id.startsWith('test_category_multi_'))
       .toList();
-  if (attrNoneTestCategories.isEmpty) {
-    print('PASS: getByAttribute() returned empty result.');
-  } else {
-    print(
-      'FAIL: getByAttribute() should return empty result '
-      'when no attribute is provided.',
-    );
-  }
+  testResults.record(
+    name: 'Return no categories without filter attributes',
+    passed: attrNoneTestCategories.isEmpty,
+    failureDetail: 'Unexpected categories: $attrNoneTestCategories.',
+  );
   // ============================================================
   // 3. UPDATE + modifiedAt
   // ============================================================
@@ -673,11 +642,9 @@ Future<void> main() async {
     userId: categoryTestUserId,
   );
   final beforeUpdate = await cRepo.getById(modifiedTestId);
-  print('Before update: $beforeUpdate');
-  print(
-    'BEFORE microseconds: '
-    '${beforeUpdate!.modifiedAt.microsecondsSinceEpoch}',
-  );
+  if (beforeUpdate == null) {
+    throw StateError('Modified test category was not created.');
+  }
   await Future.delayed(const Duration(seconds: 10)); // for reassure update time
   final modifiedUpdateResult = await cRepo.updateCategory(
     id: modifiedTestId,
@@ -685,57 +652,48 @@ Future<void> main() async {
     type: 'expense',
   );
   final afterUpdate = await cRepo.getById(modifiedTestId);
-  print('After update: $afterUpdate');
-  print(
-    'AFTER microseconds: '
-    '${afterUpdate!.modifiedAt.microsecondsSinceEpoch}',
+  testResults.record(
+    name: 'Update category timestamps',
+    passed:
+        modifiedUpdateResult == 1 &&
+        afterUpdate != null &&
+        afterUpdate.name == 'Modified Test Updated' &&
+        afterUpdate.createdAt == beforeUpdate.createdAt &&
+        (afterUpdate.modifiedAt.isAfter(beforeUpdate.modifiedAt) ||
+            afterUpdate.modifiedAt.isAtSameMomentAs(beforeUpdate.modifiedAt)),
+    failureDetail:
+        'Update result: $modifiedUpdateResult; '
+        'before: $beforeUpdate; after: $afterUpdate.',
   );
-
-  print('Update result: $modifiedUpdateResult');
-  if (modifiedUpdateResult == 1 &&
-      afterUpdate.name == 'Modified Test Updated' &&
-      afterUpdate.createdAt == beforeUpdate.createdAt &&
-      (afterUpdate.modifiedAt.isAfter(beforeUpdate.modifiedAt) ||
-          afterUpdate.modifiedAt.isAtSameMomentAs(beforeUpdate.modifiedAt))) {
-    print(
-      'PASS: updateCategory updated data and modifiedAt '
-      'while keeping createdAt.',
-    );
-  } else {
-    print('FAIL: modifiedAt / createdAt behavior is incorrect.');
-  }
   await cRepo.deleteById(id: modifiedTestId);
   // ============================================================
   // 4. MISSING ID
   // ============================================================
   print('\n${'=' * 80}\n4. CATEGORY MISSING ID\n${'=' * 80}');
   final missingCategory = await cRepo.getById(missingCategoryId);
-  if (missingCategory == null) {
-    print('PASS: getById returned null for missing ID.');
-  } else {
-    print(
-      'FAIL: Expected null.\n'
-      'Result: $missingCategory',
-    );
-  }
+  testResults.record(
+    name: 'Read category by missing ID',
+    passed: missingCategory == null,
+    failureDetail: 'Unexpected result: $missingCategory.',
+  );
   // UPDATE MISSING
   final updateMissingCategory = await cRepo.updateCategory(
     id: missingCategoryId,
     name: 'Should Not Exist',
     type: 'expense',
   );
-  if (updateMissingCategory == 0) {
-    print('PASS: update missing ID returned 0.');
-  } else {
-    print('FAIL: Expected update result = 0.');
-  }
+  testResults.record(
+    name: 'Update category with missing ID',
+    passed: updateMissingCategory == 0,
+    failureDetail: 'Expected 0 affected rows, got $updateMissingCategory.',
+  );
   // DELETE MISSING
   final deleteMissingCategory = await cRepo.deleteById(id: missingCategoryId);
-  if (deleteMissingCategory == 0) {
-    print('PASS: delete missing ID returned 0.');
-  } else {
-    print('FAIL: Expected delete result = 0.');
-  }
+  testResults.record(
+    name: 'Delete category with missing ID',
+    passed: deleteMissingCategory == 0,
+    failureDetail: 'Expected 0 affected rows, got $deleteMissingCategory.',
+  );
   // ============================================================
   // 5. DUPLICATE ID
   // ============================================================
@@ -754,20 +712,22 @@ Future<void> main() async {
       type: 'income',
       userId: categoryTestUserId,
     );
-    print('FAIL: Duplicate category ID was accepted.');
-  } catch (e) {
-    print(
-      'PASS: Duplicate category ID rejected.\n'
-      'Exception: $e',
+    testResults.record(
+      name: 'Reject duplicate category ID',
+      passed: false,
+      failureDetail: 'Duplicate category ID was accepted.',
     );
+  } catch (_) {
+    testResults.record(name: 'Reject duplicate category ID', passed: true);
   }
   final duplicateCategory = await cRepo.getById(duplicateCategoryId);
-  if (duplicateCategory != null &&
-      duplicateCategory.name == 'Duplicate Original') {
-    print('PASS: Original category remained unchanged.');
-  } else {
-    print('FAIL: Original category was modified unexpectedly.');
-  }
+  testResults.record(
+    name: 'Preserve original category after duplicate insert',
+    passed:
+        duplicateCategory != null &&
+        duplicateCategory.name == 'Duplicate Original',
+    failureDetail: 'Unexpected original category: $duplicateCategory.',
+  );
   await cRepo.deleteById(id: duplicateCategoryId);
   // ============================================================
   // 6. CATEGORY PERSISTENCE
@@ -786,8 +746,17 @@ Future<void> main() async {
         type: 'expense',
         userId: categoryTestUserId,
       );
-      print('Insert result: $result');
       final createdCategory = await cRepo.getById(categoryPersistenceId);
+      testResults.record(
+        name: 'Create category persistence data',
+        passed:
+            result > 0 &&
+            createdCategory != null &&
+            createdCategory.id == categoryPersistenceId &&
+            createdCategory.name == categoryPersistenceName &&
+            createdCategory.userId == categoryTestUserId,
+        failureDetail: 'Insert result: $result; category: $createdCategory.',
+      );
       print(
         'Created persistence data:\n'
         'Category: $createdCategory\n\n'
@@ -797,19 +766,24 @@ Future<void> main() async {
         'Persistence data: FOUND',
       );
     } catch (e) {
-      print('FAIL: Unexpected exception: $e');
+      testResults.record(
+        name: 'Create category persistence data',
+        passed: false,
+        failureDetail: 'Unexpected exception: $e',
+      );
     }
   } else {
-    print(
-      'PASS: Persistence data FOUND.\n'
-      'Category: $persistedCategory',
-    );
+    testResults.record(name: 'Find persisted category', passed: true);
     if (persistedCategory.id == categoryPersistenceId &&
         persistedCategory.name == categoryPersistenceName &&
         persistedCategory.userId == categoryTestUserId) {
-      print('PASS: Persisted category data is correct.');
+      testResults.record(name: 'Validate persisted category', passed: true);
     } else {
-      print('FAIL: Persisted category data is incorrect.');
+      testResults.record(
+        name: 'Validate persisted category',
+        passed: false,
+        failureDetail: 'Unexpected persisted category: $persistedCategory.',
+      );
     }
   }
   // ============================================================
@@ -821,6 +795,7 @@ Future<void> main() async {
   }
   print('Multi-category test data cleaned.');
   print('\n${'=' * 80}\n=== CATEGORY REPO TEST END ===\n${'=' * 80}');
+  testResults.printSummary();
   // ============================================================
   // CLOSE DATABASE
   // ============================================================
