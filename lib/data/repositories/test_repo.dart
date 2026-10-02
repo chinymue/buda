@@ -45,9 +45,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final db = AppDatabase();
-  final uRepo = UserRepo(db: db);
-  final cRepo = CategoryRepo(db: db);
   final testResults = TestResultHelper();
+
+  await testUserRepo(db, testResults);
+  await testCategoryRepo(db, testResults);
+  await testTransactionRepo(db, testResults);
+  testResults.printSummary();
+  await db.close();
+}
+
+Future<void> testUserRepo(AppDatabase db, TestResultHelper testResults) async {
+  final uRepo = UserRepo(db: db);
   // ============================================================
   // ============================================================
   // A. USER REPO TEST
@@ -293,6 +301,14 @@ Future<void> main() async {
     }
   }
   print('\n${'=' * 80}\n=== USER REPO TEST END ===\n${'=' * 80}');
+}
+
+Future<void> testCategoryRepo(
+  AppDatabase db,
+  TestResultHelper testResults,
+) async {
+  final uRepo = UserRepo(db: db);
+  final cRepo = CategoryRepo(db: db);
   // ============================================================
   // ============================================================
   // CATEGORY REPO TEST
@@ -795,9 +811,258 @@ Future<void> main() async {
   }
   print('Multi-category test data cleaned.');
   print('\n${'=' * 80}\n=== CATEGORY REPO TEST END ===\n${'=' * 80}');
-  testResults.printSummary();
-  // ============================================================
-  // CLOSE DATABASE
-  // ============================================================
-  await db.close();
+}
+
+Future<void> testTransactionRepo(
+  AppDatabase db,
+  TestResultHelper testResults,
+) async {
+  final uRepo = UserRepo(db: db);
+  final cRepo = CategoryRepo(db: db);
+  const transactionUserId = 'test_transaction_user_001';
+  const transactionUsername = 'transaction_test_user';
+  const transactionCategoryId = 'test_transaction_category_001';
+  const transactionIds = [
+    'test_transaction_001',
+    'test_transaction_002',
+    'test_transaction_003',
+  ];
+  final transactionIdSet = transactionIds.toSet();
+  final transactionDates = [
+    DateTime(2025, 1, 10),
+    DateTime(2025, 1, 20),
+    DateTime(2025, 2, 1),
+  ];
+  final tRepo = TransactionRepo(db: db);
+
+  print('\n${'=' * 80}\n=== TRANSACTION REPO TEST START ===\n${'=' * 80}');
+
+  // Clear only this test's data, in foreign-key order.
+  await tRepo.deleteByUserId(id: transactionUserId);
+  await cRepo.deleteById(id: transactionCategoryId);
+  await uRepo.deleteById(id: transactionUserId);
+
+  await uRepo.createUser(id: transactionUserId, username: transactionUsername);
+  await cRepo.createCategory(
+    id: transactionCategoryId,
+    name: 'Transaction Test Category',
+    type: 'income',
+    userId: transactionUserId,
+  );
+
+  print('\n[CREATE AND READ]');
+  final createdResult = await tRepo.createTransaction(
+    id: transactionIds[0],
+    amount: 1200,
+    date: transactionDates[0],
+    categoryId: transactionCategoryId,
+    userId: transactionUserId,
+  );
+  final createdTransaction = await tRepo.getById(transactionIds[0]);
+  testResults.record(
+    name: 'Create transaction with category-derived type',
+    passed:
+        createdResult > 0 &&
+        createdTransaction != null &&
+        createdTransaction.amount == 1200 &&
+        createdTransaction.type == 'income' &&
+        createdTransaction.categoryId == transactionCategoryId &&
+        createdTransaction.userId == transactionUserId &&
+        createdTransaction.date == transactionDates[0],
+    failureDetail:
+        'Insert result: $createdResult; transaction: $createdTransaction.',
+  );
+
+  final secondResult = await tRepo.createTransaction(
+    id: transactionIds[1],
+    amount: 450,
+    type: 'expense',
+    date: transactionDates[1],
+    categoryId: transactionCategoryId,
+    userId: transactionUserId,
+  );
+  final thirdResult = await tRepo.createTransaction(
+    id: transactionIds[2],
+    amount: 2500,
+    type: 'expense',
+    date: transactionDates[2],
+    userId: transactionUserId,
+  );
+  final allTransactions = await tRepo.getAll();
+  final createdTransactions = allTransactions
+      .where((transaction) => transactionIdSet.contains(transaction.id))
+      .toList();
+  testResults.record(
+    name: 'Create multiple transactions',
+    passed:
+        secondResult > 0 &&
+        thirdResult > 0 &&
+        createdTransactions.length == transactionIds.length,
+    failureDetail:
+        'Insert results: $secondResult, $thirdResult; '
+        'found ${createdTransactions.length} test transactions.',
+  );
+
+  print('\n[FILTER]');
+  final incomeTransactions = (await tRepo.getByType('income'))
+      .where((transaction) => transactionIdSet.contains(transaction.id))
+      .toList();
+  final byCategory = await tRepo.getByCategory(transactionCategoryId);
+  final byUser = await tRepo.getByUser(transactionUserId);
+  final amountRange = (await tRepo.getByAmount(
+    amountMin: 400,
+    amountMax: 1300,
+  )).where((transaction) => transactionIdSet.contains(transaction.id)).toList();
+  final minimumAmount = (await tRepo.getByAmount(amountMin: 2000))
+      .where((transaction) => transactionIdSet.contains(transaction.id))
+      .toList();
+  final maximumAmount = (await tRepo.getByAmount(amountMax: 450))
+      .where((transaction) => transactionIdSet.contains(transaction.id))
+      .toList();
+  final allByAmount = (await tRepo.getByAmount())
+      .where((transaction) => transactionIdSet.contains(transaction.id))
+      .toList();
+  final exactDate = (await tRepo.getByDate(start: transactionDates[0]))
+      .where((transaction) => transactionIdSet.contains(transaction.id))
+      .toList();
+  final dateRange = (await tRepo.getByDate(
+    start: transactionDates[0],
+    end: transactionDates[1],
+  )).where((transaction) => transactionIdSet.contains(transaction.id)).toList();
+  final byAttributes = (await tRepo.getByAttribute(
+    amountMin: 400,
+    amountMax: 1300,
+    type: 'expense',
+    start: transactionDates[0],
+    end: transactionDates[1],
+    categoryId: transactionCategoryId,
+    userId: transactionUserId,
+  )).toList();
+  final allByAttributes = await tRepo.getByAttribute();
+  testResults.record(
+    name: 'Filter transactions by type',
+    passed:
+        incomeTransactions.length == 1 &&
+        incomeTransactions.single.id == transactionIds[0],
+    failureDetail: 'Unexpected income transactions: $incomeTransactions.',
+  );
+  testResults.record(
+    name: 'Filter transactions by category and user',
+    passed: byCategory.length == 2 && byUser.length == transactionIds.length,
+    failureDetail: 'Category results: $byCategory; user results: $byUser.',
+  );
+  testResults.record(
+    name: 'Filter transactions by amount and date range',
+    passed:
+        amountRange.length == 2 &&
+        minimumAmount.length == 1 &&
+        minimumAmount.single.id == transactionIds[2] &&
+        maximumAmount.length == 1 &&
+        maximumAmount.single.id == transactionIds[1] &&
+        allByAmount.length == transactionIds.length &&
+        exactDate.length == 1 &&
+        exactDate.single.id == transactionIds[0] &&
+        dateRange.length == 2 &&
+        byAttributes.length == 1 &&
+        byAttributes.single.id == transactionIds[1] &&
+        allByAttributes
+                .where(
+                  (transaction) => transactionIdSet.contains(transaction.id),
+                )
+                .length ==
+            transactionIds.length,
+    failureDetail:
+        'Amount results: $amountRange; date results: $dateRange; '
+        'attribute results: $byAttributes; all attributes: $allByAttributes.',
+  );
+
+  print('\n[UPDATE]');
+  final updatedDate = DateTime(2025, 1, 15);
+  final updateResult = await tRepo.updateT(
+    transactionIds[0],
+    amount: 1350,
+    type: 'expense',
+    date: updatedDate,
+  );
+  final updatedTransaction = await tRepo.getById(transactionIds[0]);
+  testResults.record(
+    name: 'Update transaction',
+    passed:
+        updateResult == 1 &&
+        updatedTransaction != null &&
+        updatedTransaction.amount == 1350 &&
+        updatedTransaction.type == 'expense' &&
+        updatedTransaction.date == updatedDate,
+    failureDetail:
+        'Update result: $updateResult; transaction: $updatedTransaction.',
+  );
+  final negativeUpdateResult = await tRepo.updateT(
+    transactionIds[0],
+    amount: -1,
+  );
+  final afterNegativeUpdate = await tRepo.getById(transactionIds[0]);
+  testResults.record(
+    name: 'Ignore negative transaction amount on update',
+    passed: negativeUpdateResult == 1 && afterNegativeUpdate?.amount == 1350,
+    failureDetail:
+        'Update result: $negativeUpdateResult; '
+        'transaction: $afterNegativeUpdate.',
+  );
+  final negativeCreateResult = await tRepo.createTransaction(
+    id: 'test_transaction_negative_001',
+    amount: -1,
+    userId: transactionUserId,
+  );
+  testResults.record(
+    name: 'Reject negative transaction amount on create',
+    passed:
+        negativeCreateResult == -1 &&
+        await tRepo.getById('test_transaction_negative_001') == null,
+    failureDetail: 'Insert result: $negativeCreateResult.',
+  );
+
+  print('\n[DELETE]');
+  final deleteMissingResult = await tRepo.deleteById(
+    id: 'test_transaction_missing_999',
+  );
+  testResults.record(
+    name: 'Delete transaction with missing ID',
+    passed: deleteMissingResult == 0,
+    failureDetail: 'Expected 0 affected rows, got $deleteMissingResult.',
+  );
+  final deleteByIdResult = await tRepo.deleteById(id: transactionIds[0]);
+  testResults.record(
+    name: 'Delete transaction by ID',
+    passed:
+        deleteByIdResult == 1 && await tRepo.getById(transactionIds[0]) == null,
+    failureDetail: 'Delete result: $deleteByIdResult.',
+  );
+  final deleteByCategoryResult = await tRepo.deleteByCategoryId(
+    id: transactionCategoryId,
+  );
+  final remainingCategoryTransactions = await tRepo.getByCategory(
+    transactionCategoryId,
+  );
+  testResults.record(
+    name: 'Delete transactions by category ID',
+    passed:
+        deleteByCategoryResult == 1 &&
+        remainingCategoryTransactions.isEmpty &&
+        await tRepo.getById(transactionIds[2]) != null,
+    failureDetail:
+        'Deleted $deleteByCategoryResult; remaining: '
+        '$remainingCategoryTransactions.',
+  );
+  final deleteByUserResult = await tRepo.deleteByUserId(id: transactionUserId);
+  final remainingUserTransactions = await tRepo.getByUser(transactionUserId);
+  testResults.record(
+    name: 'Delete transactions by user ID',
+    passed: deleteByUserResult == 1 && remainingUserTransactions.isEmpty,
+    failureDetail:
+        'Deleted $deleteByUserResult; remaining: $remainingUserTransactions.',
+  );
+
+  await cRepo.deleteById(id: transactionCategoryId);
+  await uRepo.deleteById(id: transactionUserId);
+  print('\n${'=' * 80}\n=== TRANSACTION REPO TEST END ===\n${'=' * 80}');
 }
