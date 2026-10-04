@@ -14,6 +14,10 @@ const categoryNameFKTest = 'FK Test Category';
 const expenseTypeFKTest = 'expense';
 const categoryIdMisingTest = 'test_category_fk_invalid_001';
 const missingUserId = 'test_user_fk_missing_001';
+const transactionIdFKTest = 'test_transaction_fk_001';
+const transactionIdMissingUserTest = 'test_transaction_fk_missing_user_001';
+const transactionIdMissingCategoryTest =
+    'test_transaction_fk_missing_category_001';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +25,7 @@ Future<void> main() async {
   final db = AppDatabase();
   final uRepo = UserRepo(db: db);
   final cRepo = CategoryRepo(db: db);
+  final tRepo = TransactionRepo(db: db);
   final testResults = TestResultHelper();
 
   // ==================================================================
@@ -37,6 +42,9 @@ Future<void> main() async {
 
   // CLEAN UP
   try {
+    await tRepo.deleteById(id: transactionIdFKTest);
+    await tRepo.deleteById(id: transactionIdMissingUserTest);
+    await tRepo.deleteById(id: transactionIdMissingCategoryTest);
     await cRepo.deleteById(id: categoryIdFKTest);
     await cRepo.deleteById(id: categoryIdMisingTest);
     await uRepo.deleteById(id: userIdFKTest);
@@ -59,7 +67,90 @@ Future<void> main() async {
     failureDetail: 'Category was not created with the expected user.',
   );
 
-  // TODO: add test for transaction table, which has a foreign key to category table
+  final transactionResult = await tRepo.createTransaction(
+    id: transactionIdFKTest,
+    amount: 1250,
+    categoryId: categoryIdFKTest,
+    userId: userIdFKTest,
+  );
+  final transaction = await tRepo.getById(transactionIdFKTest);
+  testResults.record(
+    name: 'Create transaction with valid user and category foreign keys',
+    passed:
+        transactionResult > 0 &&
+        transaction != null &&
+        transaction.userId == userIdFKTest &&
+        transaction.categoryId == categoryIdFKTest,
+    failureDetail: 'Transaction was not created with the expected parents.',
+  );
+
+  try {
+    await tRepo.createTransaction(
+      id: transactionIdMissingUserTest,
+      amount: 1250,
+      categoryId: categoryIdFKTest,
+      userId: missingUserId,
+    );
+    testResults.record(
+      name: 'Reject transaction with a missing parent user',
+      passed: false,
+      failureDetail: 'Transaction was inserted with a non-existing user.',
+    );
+  } catch (_) {
+    testResults.record(
+      name: 'Reject transaction with a missing parent user',
+      passed: true,
+    );
+  }
+
+  try {
+    await tRepo.createTransaction(
+      id: transactionIdMissingCategoryTest,
+      amount: 1250,
+      categoryId: categoryIdMisingTest,
+      userId: userIdFKTest,
+    );
+    testResults.record(
+      name: 'Reject transaction with a missing parent category',
+      passed: false,
+      failureDetail: 'Transaction was inserted with a non-existing category.',
+    );
+  } catch (_) {
+    testResults.record(
+      name: 'Reject transaction with a missing parent category',
+      passed: true,
+    );
+  }
+
+  try {
+    await cRepo.deleteById(id: categoryIdFKTest);
+    testResults.record(
+      name: 'Reject deleting a category referenced by transactions',
+      passed: false,
+      failureDetail:
+          'Parent category was deleted while child transactions exist.',
+    );
+  } catch (_) {
+    testResults.record(
+      name: 'Reject deleting a category referenced by transactions',
+      passed: true,
+    );
+  }
+
+  try {
+    await uRepo.deleteById(id: userIdFKTest);
+    testResults.record(
+      name: 'Reject deleting a user referenced by transactions',
+      passed: false,
+      failureDetail: 'Parent user was deleted while child records exist.',
+    );
+  } catch (_) {
+    testResults.record(
+      name: 'Reject deleting a user referenced by transactions',
+      passed: true,
+    );
+  }
+
   try {
     await cRepo.createCategory(
       id: categoryIdMisingTest,
@@ -106,10 +197,30 @@ Future<void> main() async {
     passed: orphanCount == 0,
     failureDetail: 'Found $orphanCount orphan categories.',
   );
+
+  var orphanTransactionCount = 0;
+  final transactions = await tRepo.getAll();
+  for (final transaction in transactions) {
+    final user = await uRepo.getById(transaction.userId);
+    final category = transaction.categoryId == null
+        ? null
+        : await cRepo.getById(transaction.categoryId!);
+    if (user == null || (transaction.categoryId != null && category == null)) {
+      orphanTransactionCount++;
+    }
+  }
+  testResults.record(
+    name: 'No orphan transactions',
+    passed: orphanTransactionCount == 0,
+    failureDetail: 'Found $orphanTransactionCount orphan transactions.',
+  );
   testResults.printSummary();
 
   // CLEAN UP
   try {
+    await tRepo.deleteById(id: transactionIdFKTest);
+    await tRepo.deleteById(id: transactionIdMissingUserTest);
+    await tRepo.deleteById(id: transactionIdMissingCategoryTest);
     await cRepo.deleteById(id: categoryIdFKTest);
     await cRepo.deleteById(id: categoryIdMisingTest);
     await uRepo.deleteById(id: userIdFKTest);
