@@ -153,6 +153,9 @@ class CategoryRepo {
   // Future<int> deleteU({required Category u}) => db.delete(db.categories).delete(u);
   Future<int> deleteById({required String id}) =>
       (db.delete(db.categories)..where((u) => u.id.equals(id))).go();
+  // TODO: add test for deleteByUserId
+  Future<int> deleteByUserId({required String id}) =>
+      (db.delete(db.categories)..where((c) => c.userId.equals(id))).go();
 }
 
 class TransactionRepo {
@@ -166,10 +169,10 @@ class TransactionRepo {
   )..where((t) => t.id.equals(id))).getSingleOrNull();
   Future<List<Transaction>> getByType(String type) =>
       (db.select(db.transactions)..where((t) => t.type.equals(type))).get();
-  Future<List<Transaction>> getByCategory(String categoryId) => (db.select(
+  Future<List<Transaction>> getByCategoryId(String categoryId) => (db.select(
     db.transactions,
   )..where((t) => t.categoryId.equals(categoryId))).get();
-  Future<List<Transaction>> getByUser(String userId) =>
+  Future<List<Transaction>> getByUserId(String userId) =>
       (db.select(db.transactions)..where((t) => t.userId.equals(userId))).get();
   Future<List<Transaction>> getByAmount({int? amountMin, int? amountMax}) {
     if (amountMin != null && amountMax != null) {
@@ -177,6 +180,7 @@ class TransactionRepo {
         db.transactions,
       )..where((t) => t.amount.isBetweenValues(amountMin, amountMax))).get();
     }
+
     if (amountMin == null && amountMax != null) {
       return (db.select(
         db.transactions,

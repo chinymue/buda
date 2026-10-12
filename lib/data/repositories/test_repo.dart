@@ -907,8 +907,8 @@ Future<void> testTransactionRepo(
   final incomeTransactions = (await tRepo.getByType('income'))
       .where((transaction) => transactionIdSet.contains(transaction.id))
       .toList();
-  final byCategory = await tRepo.getByCategory(transactionCategoryId);
-  final byUser = await tRepo.getByUser(transactionUserId);
+  final byCategory = await tRepo.getByCategoryId(transactionCategoryId);
+  final byUser = await tRepo.getByUserId(transactionUserId);
   final amountRange = (await tRepo.getByAmount(
     amountMin: 400,
     amountMax: 1300,
@@ -1040,7 +1040,7 @@ Future<void> testTransactionRepo(
   final deleteByCategoryResult = await tRepo.deleteByCategoryId(
     id: transactionCategoryId,
   );
-  final remainingCategoryTransactions = await tRepo.getByCategory(
+  final remainingCategoryTransactions = await tRepo.getByCategoryId(
     transactionCategoryId,
   );
   testResults.record(
@@ -1054,7 +1054,7 @@ Future<void> testTransactionRepo(
         '$remainingCategoryTransactions.',
   );
   final deleteByUserResult = await tRepo.deleteByUserId(id: transactionUserId);
-  final remainingUserTransactions = await tRepo.getByUser(transactionUserId);
+  final remainingUserTransactions = await tRepo.getByUserId(transactionUserId);
   testResults.record(
     name: 'Delete transactions by user ID',
     passed: deleteByUserResult == 1 && remainingUserTransactions.isEmpty,

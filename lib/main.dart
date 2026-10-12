@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:buda_mvp/views/list_tpl.dart';
 
-import 'mock/mock_repos.dart';
-import 'mock/mock_data.dart';
+import 'views/list_tpl.dart';
+import 'data/database/app_database.dart';
+import 'data/repositories/repo.dart';
 
+// $time = Get-Date -Format "yyyyMMdd_HHmmss"
+// flutter run -d chrome --web-port 8080 D:\Project\Flutter\buda_mvp\lib\main.dart 2>&1 | Tee-Object -FilePath capture_log/"web_build_$time.txt"
+// $time = Get-Date -Format "yyyyMMdd_HHmmss"
+// flutter run -d window D:\Project\Flutter\buda_mvp\lib\main.dart 2>&1 | Tee-Object -FilePath capture_log/"window_build_$time.txt"
 void main() {
   runApp(const MyApp());
 }
@@ -14,9 +18,10 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    final userRepo = MockUserRepo();
-    final categoryRepo = MockCategoryRepo();
-    final transactionRepo = MockTransactionRepo();
+    final appDb = AppDatabase();
+    final userRepo = UserRepo(db: appDb);
+    final categoryRepo = CategoryRepo(db: appDb);
+    final transactionRepo = TransactionRepo(db: appDb);
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
@@ -66,29 +71,51 @@ class MyHomePage extends StatefulWidget {
   // always marked "final".
 
   final String title;
-  final MockUserRepo uRepo;
-  final MockCategoryRepo cRepo;
-  final MockTransactionRepo tRepo;
+  final UserRepo uRepo;
+  final CategoryRepo cRepo;
+  final TransactionRepo tRepo;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  late List<MockUser> _users;
-  late List<MockCategory> _categories;
-  late List<MockTransaction> _transactions;
+  late List<User> _users;
+  late List<Category> _categories;
+  late List<Transaction> _transactions;
 
-  void updateState() => setState(() {
-    _users = widget.uRepo.getAll();
-    _categories = widget.cRepo.getAll();
-    _transactions = widget.tRepo.getAll();
-  });
-  void updateUsersState() => setState(() => _users = widget.uRepo.getAll());
-  void updateCategoriesState() =>
-      setState(() => _categories = widget.cRepo.getAll());
-  void updateTransactionsState() =>
-      setState(() => _transactions = widget.tRepo.getAll());
+  Future<void> updateUsersState() async {
+    try {
+      final usersList = await widget.uRepo.getAll();
+      if (!mounted) return;
+      setState(() => _users = usersList);
+    } catch (e) {
+      print('Error updating users state: $e');
+      setState(() => _users = []);
+    }
+  }
+
+  Future<void> updateCategoriesState() async {
+    try {
+      final categoriesList = await widget.cRepo.getAll();
+      if (!mounted) return;
+      setState(() => _categories = categoriesList);
+    } catch (e) {
+      print('Error updating categories state: $e');
+      setState(() => _categories = []);
+    }
+  }
+
+  Future<void> updateTransactionsState() async {
+    try {
+      final transactionsList = await widget.tRepo.getAll();
+      if (!mounted) return;
+      setState(() => _transactions = transactionsList);
+    } catch (e) {
+      print('Error updating transactions state: $e');
+      setState(() => _transactions = []);
+    }
+  }
 
   void showData() {
     showUsers();
@@ -96,95 +123,140 @@ class _MyHomePageState extends State<MyHomePage> {
     showTransactions();
   }
 
-  void showUsers() => _users.forEach((u) => print(u.toStr()));
-  void showCategories() => _categories.forEach((c) => print(c.toStr()));
-  void showTransactions() => _transactions.forEach((t) => print(t.toStr()));
+  void showUsers() => _users.forEach((u) => print(u.toString()));
+  void showCategories() => _categories.forEach((c) => print(c.toString()));
+  void showTransactions() => _transactions.forEach((t) => print(t.toString()));
 
   @override
   void initState() {
     super.initState();
-    _users = widget.uRepo.getAll();
-    _categories = widget.cRepo.getAll();
-    _transactions = widget.tRepo.getAll();
+    _loadData();
   }
 
-  void addUser() {
+  Future<void> _loadData() async {
+    try {
+      final usersList = await widget.uRepo.getAll();
+      final categoriesList = await widget.cRepo.getAll();
+      final transactionsList = await widget.tRepo.getAll();
+      if (!mounted) return;
+      setState(() {
+        _users = usersList;
+        _categories = categoriesList;
+        _transactions = transactionsList;
+      });
+    } catch (e) {
+      print('Error loading data: $e');
+      // TODO: Handle empty database case, show message to user
+      setState(() {
+        _users = [];
+        _categories = [];
+        _transactions = [];
+      });
+    }
+  }
+
+  Future<void> addUser() async {
     final data = DateTime.now().toString();
     print('Add User: $data ${'-' * 100}');
-    widget.uRepo.add(MockUser(id: data, username: 'User ${_users.length + 1}'));
-    updateUsersState();
+    await widget.uRepo.createUser(
+      id: data,
+      username: 'User ${_users.length + 1} $data',
+    );
+    await updateUsersState();
     showUsers();
   }
 
-  void addCategory() {
+  Future<void> addCategory() async {
     final data = DateTime.now().toString();
     print('Add Category: $data ${'-' * 100}');
-    widget.cRepo.add(
-      MockCategory(
-        id: data,
-        name: 'Category ${_categories.length + 1}',
-        userId: _users.last.id,
-      ),
+    await widget.cRepo.createCategory(
+      id: data,
+      name: 'Category ${_categories.length + 1} $data',
+      userId: _users.isNotEmpty ? _users.last.id : 'default_user_id',
     );
-    updateCategoriesState();
+    await updateCategoriesState();
     showCategories();
   }
 
-  void addTransaction() {
+  Future<void> addTransaction() async {
     final data = DateTime.now();
     print('Add Transactions: ${data.toString()} ${'-' * 100}');
-    widget.tRepo.add(
-      MockTransaction(
+    if (_categories.isNotEmpty) {
+      await widget.tRepo.createTransaction(
         id: data.toString(),
         amount: data.millisecondsSinceEpoch,
         date: data,
         categoryId: _categories.last.id,
-        userId: _users.last.id,
-      ),
-    );
-    updateTransactionsState();
+        userId: _users.isNotEmpty ? _users.last.id : 'default_user_id',
+      );
+    } else {
+      await widget.tRepo.createTransaction(
+        id: data.toString(),
+        amount: data.millisecondsSinceEpoch,
+        date: data,
+        userId: _users.isNotEmpty ? _users.last.id : 'default_user_id',
+      );
+    }
+
+    await updateTransactionsState();
     showTransactions();
   }
 
-  void removeUser(String id) {
+  Future<void> removeUser(String id) async {
     print('Remove User $id ${'-' * 100}');
-    widget.tRepo.removeByUserId(id);
-    widget.cRepo.removeByUserId(id);
-    widget.uRepo.removeById(id);
-    updateState();
+    await widget.tRepo.deleteByUserId(id: id);
+    await widget.cRepo.deleteByUserId(id: id);
+    await widget.uRepo.deleteById(id: id);
+    _loadData();
     showData();
   }
 
-  void removeCategory(String id) {
+  Future<void> removeCategory(String id) async {
     print('Remove Category $id ${'-' * 100}');
-    widget.tRepo.removeByCategoryId(id);
-    widget.cRepo.removeById(id);
-    updateTransactionsState();
-    updateCategoriesState();
-    showCategories();
-    showTransactions();
+    await widget.tRepo.deleteByCategoryId(id: id);
+    await widget.cRepo.deleteById(id: id);
+    _loadData();
+    showData();
   }
 
-  void removeTransaction(String id) {
+  Future<void> removeTransaction(String id) async {
     print('Remove Transaction $id ${'-' * 100}');
-    widget.tRepo.removeById(id = id);
-    updateTransactionsState();
+    await widget.tRepo.deleteById(id: id);
+    await updateTransactionsState();
     showTransactions();
   }
 
-  void filterDataOfUser(String id) {
+  Future<void> filterDataOfUser(String id) async {
     print('Filter Data By userId $id ${'-' * 100}');
-    setState(() {
-      _categories = widget.cRepo.getByUser(id);
-      _transactions = widget.tRepo.getByUser(id);
-    });
+    try {
+      final categoriesList = await widget.cRepo.getByUserId(id);
+      final transactionsList = await widget.tRepo.getByUserId(id);
+      if (!mounted) return;
+      setState(() {
+        _categories = categoriesList;
+        _transactions = transactionsList;
+      });
+    } catch (e) {
+      print('Error filtering data by user: $e');
+      setState(() {
+        _categories = [];
+        _transactions = [];
+      });
+    }
     showCategories();
     showTransactions();
   }
 
-  void filterTransactionsByCategory(String id) {
+  Future<void> filterTransactionsByCategory(String id) async {
     print('Filter Transactions By categoryId $id ${'-' * 100}');
-    setState(() => _transactions = widget.tRepo.getByCategory(id));
+    try {
+      final transactionsList = await widget.tRepo.getByCategoryId(id);
+      if (!mounted) return;
+      setState(() => _transactions = transactionsList);
+    } catch (e) {
+      print('Error filtering transactions by category: $e');
+      setState(() => _transactions = []);
+    }
     showTransactions();
   }
 
