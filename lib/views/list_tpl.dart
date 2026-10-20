@@ -32,9 +32,17 @@ class ListTemplate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // TODO: Fix onchanged detection for actions. Currently can't check by toSring(): Onchanged: Closure: (String, String) => void.
+    debugPrint('ListTemplate build: $title, items: ${items.length}');
+    debugPrint('Onchanged: ${onChanged.toString()}');
+    final bool hasRemove = onChanged.toString().contains('remove');
+    final bool hasEdit = onChanged.toString().contains('edit');
+    final bool hasFilter = onChanged.toString().contains('filter');
+    final int actionCount =
+        (hasRemove ? 1 : 0) + (hasEdit ? 1 : 0) + (hasFilter ? 1 : 0);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.yellow,
+        color: Colors.primaries[0].shade100,
         border: Border.all(color: Colors.grey),
         borderRadius: BorderRadius.circular(8.0),
       ),
@@ -46,33 +54,42 @@ class ListTemplate extends StatelessWidget {
           child: Column(
             children: [
               Text(title),
-              if (subtitle?.isNotEmpty == true) Text(subtitle!),
+              if (subtitle != null) Text(subtitle!),
               SizedBox(
                 width: maxWidth,
-                height: maxHeight - 100,
+                height:
+                    maxHeight -
+                    100, // Adjust height to account for title and subtitle
                 child: ListView(
                   scrollDirection: Axis.vertical,
                   children: [
                     for (String item in items)
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           ListTileTemplate(
-                            maxWidth: maxWidth - 50 * 3,
-                            maxHeight: (maxHeight - 100) / 5,
+                            maxWidth: maxWidth - 50 * actionCount,
+                            maxHeight: 50,
                             item: item,
                           ),
-                          IconButton(
-                            onPressed: () => onChanged(item, 'remove'),
-                            icon: const Icon(Icons.remove),
-                          ),
-                          IconButton(
-                            onPressed: () => onChanged(item, 'edit'),
-                            icon: const Icon(Icons.edit),
-                          ),
-                          IconButton(
-                            onPressed: () => onChanged(item, 'filter'),
-                            icon: const Icon(Icons.filter_alt),
-                          ),
+                          if (hasRemove)
+                            IconButton(
+                              alignment: Alignment.centerRight,
+                              onPressed: () => onChanged(item, 'remove'),
+                              icon: const Icon(Icons.remove),
+                            ),
+                          if (hasEdit)
+                            IconButton(
+                              alignment: Alignment.centerRight,
+                              onPressed: () => onChanged(item, 'edit'),
+                              icon: const Icon(Icons.edit),
+                            ),
+                          if (hasFilter)
+                            IconButton(
+                              alignment: Alignment.centerRight,
+                              onPressed: () => onChanged(item, 'filter'),
+                              icon: const Icon(Icons.filter_alt),
+                            ),
                         ],
                       ),
                   ],
