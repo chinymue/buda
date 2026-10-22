@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// TODO: fix item2string -> can perform action on multi field instead of rely on id
 class TListTemplate<T> extends ListTemplate {
   TListTemplate({
     super.key,
@@ -33,8 +34,8 @@ class ListTemplate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // TODO: Fix onchanged detection for actions. Currently can't check by toSring(): Onchanged: Closure: (String, String) => void.
-    debugPrint('ListTemplate build: $title, items: ${items.length}');
-    debugPrint('Onchanged: ${onChanged.toString()}');
+    // debugPrint('ListTemplate build: $title, items: ${items.length}');
+    // debugPrint('Onchanged: ${onChanged.toString()}');
     final bool hasRemove = onChanged.toString().contains('remove');
     final bool hasEdit = onChanged.toString().contains('edit');
     final bool hasFilter = onChanged.toString().contains('filter');

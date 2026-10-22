@@ -75,11 +75,23 @@ class MyHomePage extends StatefulWidget {
 
 // TODO: Add a state management solution to avoid passing the repositories down the widget tree. For now, we will pass them down to the MyHomePage widget.
 class _MyHomePageState extends State<MyHomePage> {
-  late List<User> _users;
-  late List<Category> _categories;
-  late List<Transaction> _transactions;
+  List<User> _users = [];
+  List<Category> _categories = [];
+  List<Transaction> _transactions = [];
   String _pageMsg = "", _uMsg = "", _cMsg = "", _tMsg = "";
   User? _currentUser;
+  Category? _currentCategory;
+  TypeEnum _currentCatgType = TypeEnum.expense,
+      _currentTransType = TypeEnum.expense;
+
+  void updateCatgType(TypeEnum newType) =>
+      setState(() => _currentCatgType = newType);
+
+  void updateTransType(TypeEnum newType) =>
+      setState(() => _currentTransType = newType);
+
+  void updateCurrentCatg(Category catg) =>
+      setState(() => _currentCategory = catg);
 
   @override
   void initState() {
@@ -216,11 +228,6 @@ class _MyHomePageState extends State<MyHomePage> {
     final data = DateTime.now().toString();
     debugPrint('Add User: $data ${'-' * 100}');
     try {
-      // await widget.uRepo.createUser(
-      //   id: data,
-      //   username: 'User ${_users.length + 1} $data',
-      // );
-      // await updateUsersState();
       final result = await Future.wait([
         widget.uRepo.createUser(
           id: data,
@@ -228,6 +235,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
         widget.uRepo.getById(data),
       ]);
+      if (!mounted) return;
       setState(() {
         _users.add(result[1] as User);
         _currentUser = result[1] as User;
@@ -240,6 +248,7 @@ class _MyHomePageState extends State<MyHomePage> {
       showUsers();
     } catch (e) {
       debugPrint('Error adding user: $e');
+      if (!mounted) return;
       setState(() {
         _users = [];
         _uMsg = 'No users yet.';
@@ -248,7 +257,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<void> addCategory() async {
+  Future<void> addCategory({String? name, TypeEnum? type}) async {
     final data = DateTime.now().toString();
     debugPrint('Add Category: $data ${'-' * 100}');
     try {
@@ -258,15 +267,36 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() => _pageMsg = 'Add a user before creating a category.');
         return;
       }
-      await widget.cRepo.createCategory(
-        id: data,
-        name: 'Category ${_categories.length + 1} $data',
-        userId: checkUserId,
-      );
-      await updateCategoriesState();
+      name ??= 'Category ${_categories.length + 1} $data';
+      type ??= TypeEnum.expense;
+      final result = await Future.wait([
+        widget.cRepo.createCategory(
+          id: data,
+          name: name,
+          type: type.name,
+          userId: checkUserId,
+        ),
+        widget.cRepo.getById(data),
+        widget.cRepo.getByAttribute(
+          name: name,
+          type: type.name,
+          userId: checkUserId,
+        ),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _categories.add(result[1] as Category);
+        _currentCategory = result[1] as Category;
+        _cMsg = _categories.isEmpty ? 'No categories yet.' : '';
+        _pageMsg =
+            _users.isEmpty && _categories.isEmpty && _transactions.isEmpty
+            ? 'No data yet.'
+            : '';
+      });
       showCategories();
     } catch (e) {
       debugPrint('Error adding category: $e');
+      if (!mounted) return;
       setState(() {
         _categories = [];
         _cMsg = 'No categories yet.';
@@ -275,7 +305,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<void> addTransaction() async {
+  // TODO: fix error add transaction
+  Future<void> addTransaction({String? strAmount, TypeEnum? type}) async {
     final data = DateTime.now();
     debugPrint('Add Transactions: ${data.toString()} ${'-' * 100}');
     try {
@@ -285,27 +316,45 @@ class _MyHomePageState extends State<MyHomePage> {
         setState(() => _pageMsg = 'Add a user before creating a transaction.');
         return;
       }
-      if (_categories.isNotEmpty) {
-        await widget.tRepo.createTransaction(
+      final amount = strAmount?.trim() != null
+          ? int.tryParse(strAmount!.trim())
+          : data.millisecondsSinceEpoch;
+      type ??= TypeEnum.expense;
+      final catgId =
+          _currentCategory?.id ??
+          (_categories.isNotEmpty ? _categories.last.id : null);
+      debugPrint('$amount; $type; $catgId');
+      final result = await Future.wait([
+        widget.tRepo.createTransaction(
           id: data.toString(),
-          amount: data.millisecondsSinceEpoch,
+          amount: amount!,
           date: data,
-          categoryId: _categories.last.id,
+          categoryId: catgId,
           userId: checkUserId,
-        );
-      } else {
-        await widget.tRepo.createTransaction(
-          id: data.toString(),
-          amount: data.millisecondsSinceEpoch,
-          date: data,
+        ),
+        widget.tRepo.getById(data.toString()),
+        widget.tRepo.getByAttribute(
+          amountMin: amount,
+          type: type.name,
+          categoryId: catgId,
           userId: checkUserId,
-        );
-      }
-
-      await updateTransactionsState();
+        ),
+      ]);
+      debugPrint('results: $result');
+      if (!mounted) return;
+      setState(() {
+        _transactions.add(result[1] as Transaction);
+        _tMsg = _transactions.isEmpty ? 'No transactions yet.' : '';
+        _pageMsg =
+            _users.isEmpty && _transactions.isEmpty && _transactions.isEmpty
+            ? 'No data yet.'
+            : '';
+      });
       showTransactions();
     } catch (e) {
       debugPrint('Error adding transaction: $e');
+      debugPrint('Para of method: $strAmount, $type');
+      if (!mounted) return;
       setState(() {
         _transactions = [];
         _tMsg = 'No transactions yet.';
@@ -449,6 +498,7 @@ class _MyHomePageState extends State<MyHomePage> {
           child: Center(
             child: SingleChildScrollView(
               child: Column(
+                spacing: 10,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (_pageMsg.isNotEmpty)
@@ -458,63 +508,58 @@ class _MyHomePageState extends State<MyHomePage> {
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                     ),
-                  SizedBox(height: 10),
                   if (_users.isNotEmpty ||
                       _categories.isNotEmpty ||
                       _transactions.isNotEmpty)
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.8,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          TListTemplate(
-                            maxWidth: MediaQuery.of(context).size.width * 0.3,
-                            items: _users,
-                            item2String: ((u) => u.username),
-                            title: 'Users',
-                            subtitle: _uMsg,
-                            onChanged: (id, type) {
-                              switch (type) {
-                                case 'remove':
-                                  removeUser(id);
-                                case 'filter':
-                                  filterDataOfUser(id);
-                              }
-                            },
-                          ),
-                          TListTemplate(
-                            maxWidth: MediaQuery.of(context).size.width * 0.3,
-                            items: _categories,
-                            item2String: ((c) => c.name),
-                            title: 'Categories',
-                            subtitle: _cMsg,
-                            onChanged: (id, type) {
-                              switch (type) {
-                                case 'remove':
-                                  removeCategory(id);
-                                case 'filter':
-                                  filterTransactionsByCategory(id);
-                              }
-                            },
-                          ),
-                          TListTemplate(
-                            maxWidth: MediaQuery.of(context).size.width * 0.3,
-                            items: _transactions,
-                            item2String: ((t) => t.id),
-                            title: 'Transactions',
-                            subtitle: _tMsg,
-                            onChanged: (id, type) {
-                              switch (type) {
-                                case 'remove':
-                                  removeTransaction(id);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        TListTemplate(
+                          maxWidth: MediaQuery.of(context).size.width * 0.3,
+                          items: _users,
+                          item2String: ((u) => u.username),
+                          title: 'Users',
+                          subtitle: _uMsg,
+                          onChanged: (id, type) {
+                            switch (type) {
+                              case 'remove':
+                                removeUser(id);
+                              case 'filter':
+                                filterDataOfUser(id);
+                            }
+                          },
+                        ),
+                        TListTemplate(
+                          maxWidth: MediaQuery.of(context).size.width * 0.3,
+                          items: _categories,
+                          item2String: ((c) => c.id),
+                          title: 'Categories',
+                          subtitle: _cMsg,
+                          onChanged: (id, type) {
+                            switch (type) {
+                              case 'remove':
+                                removeCategory(id);
+                              case 'filter':
+                                filterTransactionsByCategory(id);
+                            }
+                          },
+                        ),
+                        TListTemplate(
+                          maxWidth: MediaQuery.of(context).size.width * 0.3,
+                          items: _transactions,
+                          item2String: ((t) => t.id),
+                          title: 'Transactions',
+                          subtitle: _tMsg,
+                          onChanged: (id, type) {
+                            switch (type) {
+                              case 'remove':
+                                removeTransaction(id);
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   // TODO: fix space gap bettween the list and the actions. For now, we will just add a SizedBox to create some space.
-                  SizedBox(height: 10),
                   ListActionTemplate(
                     actions: [
                       ('Add user', addUser),
@@ -523,39 +568,138 @@ class _MyHomePageState extends State<MyHomePage> {
                       ('Clear all data', clearData),
                     ],
                   ),
-                  Divider(color: Colors.grey, thickness: 1),
-                  SizedBox(height: 10),
-                  DropdownMenu(
-                    width: 400,
-                    label: const Text('Current User'),
-                    dropdownMenuEntries: _users
-                        .map(
-                          (u) =>
-                              DropdownMenuEntry(value: u.id, label: u.username),
-                        )
-                        .toList(),
-                    initialSelection: _currentUser?.id,
-                    onSelected: (value) {
-                      if (value != null) {
-                        filterDataOfUser(value);
-                      }
-                    },
+                  Divider(color: Colors.grey, thickness: 2),
+                  Wrap(
+                    runSpacing: 10,
+                    spacing: 10,
+                    children: [
+                      DropdownMenu(
+                        width: 400,
+                        label: const Text('Current User'),
+                        dropdownMenuEntries: _users
+                            .map(
+                              (u) => DropdownMenuEntry(
+                                value: u.id,
+                                label: u.username,
+                              ),
+                            )
+                            .toList(),
+                        initialSelection: _currentUser?.id,
+                        onSelected: (value) {
+                          if (value != null) {
+                            filterDataOfUser(value);
+                          }
+                        },
+                      ),
+                      TextField(
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Input username to update user info',
+                        ),
+                        onSubmitted: (value) {
+                          if (value.isNotEmpty) {
+                            updateUser(value);
+                          } else {
+                            debugPrint(
+                              'Username is empty. Cannot update user info.',
+                            );
+                          }
+                        },
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 10),
-                  TextField(
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Input username to update user info',
-                    ),
-                    onSubmitted: (value) {
-                      if (value.isNotEmpty) {
-                        updateUser(value);
-                      } else {
-                        debugPrint(
-                          'Username is empty. Cannot update user info.',
-                        );
-                      }
-                    },
+                  Divider(color: Colors.grey, thickness: 1),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      TextField(
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText:
+                              'Input category name to create new category',
+                        ),
+                        onSubmitted: (value) {
+                          if (value.isNotEmpty) {
+                            addCategory(name: value, type: _currentCatgType);
+                          } else {
+                            debugPrint(
+                              'Category name is empty. Cannot create new category.',
+                            );
+                          }
+                        },
+                      ),
+                      DropdownMenu(
+                        width: 200,
+                        label: const Text('Type'),
+                        dropdownMenuEntries: TypeEnum.values
+                            .map(
+                              (i) => DropdownMenuEntry(value: i, label: i.name),
+                            )
+                            .toList(),
+                        initialSelection: _currentCatgType,
+                        onSelected: (value) {
+                          if (value != null) {
+                            updateCatgType(value);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  Divider(color: Colors.grey, thickness: 1),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      TextField(
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Input amount to create new transaction',
+                        ),
+                        onSubmitted: (value) {
+                          if (value.isNotEmpty) {
+                            addTransaction(
+                              strAmount: value,
+                              type: _currentTransType,
+                            );
+                          } else {
+                            debugPrint(
+                              'Transaction amount is empty. Cannot create new transaction.',
+                            );
+                          }
+                        },
+                      ),
+                      DropdownMenu(
+                        width: 200,
+                        label: const Text('Type'),
+                        dropdownMenuEntries: TypeEnum.values
+                            .map(
+                              (i) => DropdownMenuEntry(value: i, label: i.name),
+                            )
+                            .toList(),
+                        initialSelection: _currentTransType,
+                        onSelected: (value) {
+                          if (value != null) {
+                            updateTransType(value);
+                          }
+                        },
+                      ),
+                      DropdownMenu(
+                        width: 200,
+                        label: const Text('Category'),
+                        dropdownMenuEntries: _categories
+                            .map(
+                              (i) => DropdownMenuEntry(value: i, label: i.name),
+                            )
+                            .toList(),
+                        initialSelection: _currentCategory,
+                        onSelected: (value) {
+                          if (value != null) {
+                            updateCurrentCatg(value);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),

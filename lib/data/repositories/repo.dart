@@ -2,6 +2,19 @@ import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
 
+enum TypeEnum { income, expense, transfer }
+
+String labelForTypeEnum(TypeEnum type) {
+  switch (type) {
+    case TypeEnum.income:
+      return 'Income';
+    case TypeEnum.expense:
+      return 'Expense';
+    case TypeEnum.transfer:
+      return 'Transfer';
+  }
+}
+
 class UserRepo {
   final AppDatabase db;
   UserRepo({required this.db});
