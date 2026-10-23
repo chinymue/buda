@@ -81,11 +81,51 @@ class _MyHomePageState extends State<MyHomePage> {
   String _pageMsg = "", _uMsg = "", _cMsg = "", _tMsg = "";
   User? _currentUser;
   Category? _currentCategory;
-  TypeEnum _currentCatgType = TypeEnum.expense,
-      _currentTransType = TypeEnum.expense;
+  Category? _editingCategory;
+  final _categoryNameController = TextEditingController();
+  final _categoryFormKey = GlobalKey<FormState>();
+  String? _categoryFormError;
+  bool _isSavingCategory = false;
+  TypeEnum _categoryFormType = TypeEnum.expense;
+  TypeEnum _currentTransType = TypeEnum.expense;
 
-  void updateCatgType(TypeEnum newType) =>
-      setState(() => _currentCatgType = newType);
+  @override
+  void dispose() {
+    _categoryNameController.dispose();
+    super.dispose();
+  }
+
+  void startNewCategoryForm() {
+    setState(() {
+      _editingCategory = null;
+      _categoryNameController.clear();
+      _categoryFormType = TypeEnum.expense;
+      _categoryFormError = null;
+    });
+  }
+
+  void editCategory(Category category) {
+    setState(() {
+      _editingCategory = category;
+      _categoryNameController.text = category.name;
+      _categoryFormType = TypeEnum.values.firstWhere(
+        (type) => type.name == category.type,
+      );
+      _categoryFormError = null;
+    });
+  }
+
+  void cancelCategoryEdit() {
+    setState(() {
+      _editingCategory = null;
+      _categoryNameController.clear();
+      _categoryFormType = TypeEnum.expense;
+      _categoryFormError = null;
+    });
+  }
+
+  void updateCategoryFormType(TypeEnum newType) =>
+      setState(() => _categoryFormType = newType);
 
   void updateTransType(TypeEnum newType) =>
       setState(() => _currentTransType = newType);
@@ -259,30 +299,77 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Future<void> addCategory({String? name, TypeEnum? type}) async {
-    final data = DateTime.now().toString();
-    debugPrint('Add Category: $data ${'-' * 100}');
-    try {
-      final checkUserId =
-          _currentUser?.id ?? (_users.isNotEmpty ? _users.last.id : null);
-      if (checkUserId == null) {
-        setState(() => _pageMsg = 'Add a user before creating a category.');
-        return;
-      }
-      name ??= 'Category ${_categories.length + 1} $data';
-      type ??= TypeEnum.expense;
-      final result = await widget.cRepo.createCategory(
-        id: data,
-        name: name,
-        type: type.name,
-        userId: checkUserId,
+  Future<void> saveCategory() async {
+    if (_isSavingCategory ||
+        !(_categoryFormKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    final userId =
+        _currentUser?.id ?? (_users.isNotEmpty ? _users.last.id : null);
+    if (userId == null && _editingCategory == null) {
+      setState(
+        () => _categoryFormError = 'Add a user before creating a category.',
       );
+      return;
+    }
+
+    final name = _categoryNameController.text.trim();
+    final type = _categoryFormType;
+    final categoryBeingEdited = _editingCategory;
+    setState(() {
+      _isSavingCategory = true;
+      _categoryFormError = null;
+    });
+
+    try {
+      late final Category result;
+      if (categoryBeingEdited == null) {
+        final id = DateTime.now().toString();
+        final createdCategory = await widget.cRepo.createCategory(
+          id: id,
+          name: name,
+          type: type.name,
+          userId: userId!,
+        );
+        if (createdCategory == null) {
+          throw StateError('Category creation returned no category.');
+        }
+        result = createdCategory;
+      } else {
+        final updatedCount = await widget.cRepo.updateCategory(
+          id: categoryBeingEdited.id,
+          name: name,
+          type: type.name,
+        );
+        if (updatedCount == 0) {
+          throw StateError('No category was updated.');
+        }
+        final updatedCategory = await widget.cRepo.getById(
+          categoryBeingEdited.id,
+        );
+        if (updatedCategory == null) {
+          throw StateError('Updated category could not be loaded.');
+        }
+        result = updatedCategory;
+      }
+
       if (!mounted) return;
       setState(() {
-        if (result != null) {
+        if (categoryBeingEdited == null) {
           _categories.add(result);
           _currentCategory = result;
+        } else {
+          final index = _categories.indexWhere(
+            (category) => category.id == result.id,
+          );
+          if (index != -1) _categories[index] = result;
+          if (_currentCategory?.id == result.id) _currentCategory = result;
         }
+        _editingCategory = null;
+        _categoryNameController.clear();
+        _categoryFormType = TypeEnum.expense;
+        _categoryFormError = null;
         _cMsg = _categories.isEmpty ? 'No categories yet.' : '';
         _pageMsg =
             _users.isEmpty && _categories.isEmpty && _transactions.isEmpty
@@ -291,13 +378,15 @@ class _MyHomePageState extends State<MyHomePage> {
       });
       showCategories();
     } catch (e) {
-      debugPrint('Error adding category: $e');
+      debugPrint('Error saving category: $e');
       if (!mounted) return;
       setState(() {
-        _categories = [];
-        _cMsg = 'No categories yet.';
-        _pageMsg = 'Error adding category.';
+        _categoryFormError = 'Could not save category. Please try again.';
       });
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingCategory = false);
+      }
     }
   }
 
@@ -367,6 +456,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> removeCategory(String id) async {
     debugPrint('Remove Category $id ${'-' * 100}');
+    if (_editingCategory?.id == id) cancelCategoryEdit();
     await widget.tRepo.deleteByCategoryId(id: id);
     await widget.cRepo.deleteById(id: id);
     loadData();
@@ -540,16 +630,17 @@ class _MyHomePageState extends State<MyHomePage> {
                           subtitle: _cMsg,
                           actions: const {
                             ListItemAction.remove,
+                            ListItemAction.edit,
                             ListItemAction.filter,
                           },
                           onAction: (catg, action) {
                             switch (action) {
                               case ListItemAction.remove:
                                 removeCategory(catg.id);
+                              case ListItemAction.edit:
+                                editCategory(catg);
                               case ListItemAction.filter:
                                 filterTransactionsByCategory(catg);
-                              case ListItemAction.edit:
-                                break;
                             }
                           },
                         ),
@@ -577,7 +668,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   ListActionTemplate(
                     actions: [
                       ('Add user', addUser),
-                      ('Add category', addCategory),
+                      ('Add category', startNewCategoryForm),
                       ('Add Transaction', addTransaction),
                       ('Clear all data', clearData),
                     ],
@@ -623,44 +714,79 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                   Divider(color: Colors.grey, thickness: 1),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      // TODO: implement update category name by controller text field
-                      TextField(
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText:
-                              'Input category name to create new category',
+                  Form(
+                    key: _categoryFormKey,
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        TextFormField(
+                          controller: _categoryNameController,
+                          decoration: InputDecoration(
+                            border: const OutlineInputBorder(),
+                            labelText: _editingCategory == null
+                                ? 'Category name'
+                                : 'Edit category name',
+                          ),
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => saveCategory(),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Enter a category name.'
+                              : null,
                         ),
-                        // groupId: EditableText(controller: controller, focusNode: focusNode, style: style, cursorColor: cursorColor, backgroundCursorColor: backgroundCursorColor),
-                        onSubmitted: (value) {
-                          if (value.isNotEmpty) {
-                            addCategory(name: value, type: _currentCatgType);
-                          } else {
-                            debugPrint(
-                              'Category name is empty. Cannot create new category.',
-                            );
-                          }
-                        },
-                      ),
-                      DropdownMenu(
-                        width: 200,
-                        label: const Text('Type'),
-                        dropdownMenuEntries: TypeEnum.values
-                            .map(
-                              (i) => DropdownMenuEntry(value: i, label: i.name),
-                            )
-                            .toList(),
-                        initialSelection: _currentCatgType,
-                        onSelected: (value) {
-                          if (value != null) {
-                            updateCatgType(value);
-                          }
-                        },
-                      ),
-                    ],
+                        DropdownMenu<TypeEnum>(
+                          key: ValueKey(_categoryFormType),
+                          width: 200,
+                          label: const Text('Type'),
+                          dropdownMenuEntries: TypeEnum.values
+                              .map(
+                                (type) => DropdownMenuEntry(
+                                  value: type,
+                                  label: type.name,
+                                ),
+                              )
+                              .toList(),
+                          initialSelection: _categoryFormType,
+                          onSelected: (value) {
+                            if (value != null) {
+                              updateCategoryFormType(value);
+                            }
+                          },
+                        ),
+                        ElevatedButton(
+                          onPressed: _isSavingCategory ? null : saveCategory,
+                          child: _isSavingCategory
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  _editingCategory == null
+                                      ? 'Create category'
+                                      : 'Save changes',
+                                ),
+                        ),
+                        if (_editingCategory != null)
+                          TextButton(
+                            onPressed: _isSavingCategory
+                                ? null
+                                : cancelCategoryEdit,
+                            child: const Text('Cancel'),
+                          ),
+                        if (_categoryFormError != null)
+                          Text(
+                            _categoryFormError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                   Divider(color: Colors.grey, thickness: 1),
                   Wrap(

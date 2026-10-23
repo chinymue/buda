@@ -59,7 +59,7 @@ class MockTransaction {
     type,
     this.categoryId,
     this.userId,
-  ) : type = type ?? TypeEnum.expense, // TODO: Resolve conflict if category and trans diff in type
+  ) : type = type ?? TypeEnum.expense,
       date = DateTime.now();
 
   String toStr() =>
