@@ -153,6 +153,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     } catch (e) {
       debugPrint('Error updating users state: $e');
+      if (!mounted) return;
       setState(() {
         _users = [];
         _uMsg = 'No users yet.';
@@ -175,6 +176,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     } catch (e) {
       debugPrint('Error updating categories state: $e');
+      if (!mounted) return;
       setState(() {
         _categories = [];
         _cMsg = 'No categories yet.';
@@ -197,6 +199,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     } catch (e) {
       debugPrint('Error updating transactions state: $e');
+      if (!mounted) return;
       setState(() {
         _transactions = [];
         _tMsg = 'No transactions yet.';
@@ -228,17 +231,16 @@ class _MyHomePageState extends State<MyHomePage> {
     final data = DateTime.now().toString();
     debugPrint('Add User: $data ${'-' * 100}');
     try {
-      final result = await Future.wait([
-        widget.uRepo.createUser(
-          id: data,
-          username: 'User ${_users.length + 1} $data',
-        ),
-        widget.uRepo.getById(data),
-      ]);
+      final result = await widget.uRepo.createUser(
+        id: data,
+        username: 'User ${_users.length + 1} $data',
+      );
       if (!mounted) return;
       setState(() {
-        _users.add(result[1] as User);
-        _currentUser = result[1] as User;
+        if (result != null) {
+          _users.add(result);
+          _currentUser = result;
+        }
         _uMsg = _users.isEmpty ? 'No users yet.' : '';
         _pageMsg =
             _users.isEmpty && _categories.isEmpty && _transactions.isEmpty
@@ -269,24 +271,18 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       name ??= 'Category ${_categories.length + 1} $data';
       type ??= TypeEnum.expense;
-      final result = await Future.wait([
-        widget.cRepo.createCategory(
-          id: data,
-          name: name,
-          type: type.name,
-          userId: checkUserId,
-        ),
-        widget.cRepo.getById(data),
-        widget.cRepo.getByAttribute(
-          name: name,
-          type: type.name,
-          userId: checkUserId,
-        ),
-      ]);
+      final result = await widget.cRepo.createCategory(
+        id: data,
+        name: name,
+        type: type.name,
+        userId: checkUserId,
+      );
       if (!mounted) return;
       setState(() {
-        _categories.add(result[1] as Category);
-        _currentCategory = result[1] as Category;
+        if (result != null) {
+          _categories.add(result);
+          _currentCategory = result;
+        }
         _cMsg = _categories.isEmpty ? 'No categories yet.' : '';
         _pageMsg =
             _users.isEmpty && _categories.isEmpty && _transactions.isEmpty
@@ -305,7 +301,6 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  // TODO: fix error add transaction
   Future<void> addTransaction({String? strAmount, TypeEnum? type}) async {
     final data = DateTime.now();
     debugPrint('Add Transactions: ${data.toString()} ${'-' * 100}');
@@ -324,26 +319,17 @@ class _MyHomePageState extends State<MyHomePage> {
           _currentCategory?.id ??
           (_categories.isNotEmpty ? _categories.last.id : null);
       debugPrint('$amount; $type; $catgId');
-      final result = await Future.wait([
-        widget.tRepo.createTransaction(
-          id: data.toString(),
-          amount: amount!,
-          date: data,
-          categoryId: catgId,
-          userId: checkUserId,
-        ),
-        widget.tRepo.getById(data.toString()),
-        widget.tRepo.getByAttribute(
-          amountMin: amount,
-          type: type.name,
-          categoryId: catgId,
-          userId: checkUserId,
-        ),
-      ]);
+      final result = await widget.tRepo.createTransaction(
+        id: data.toString(),
+        amount: amount!,
+        date: data,
+        categoryId: catgId,
+        userId: checkUserId,
+      );
       debugPrint('results: $result');
       if (!mounted) return;
       setState(() {
-        _transactions.add(result[1] as Transaction);
+        if (result != null) _transactions.add(result);
         _tMsg = _transactions.isEmpty ? 'No transactions yet.' : '';
         _pageMsg =
             _users.isEmpty && _transactions.isEmpty && _transactions.isEmpty
@@ -367,6 +353,7 @@ class _MyHomePageState extends State<MyHomePage> {
     debugPrint('Remove User $id ${'-' * 100}');
     if (_currentUser?.id == id && _users.isNotEmpty) {
       final index = _users.indexWhere((u) => u.id == id);
+      if (!mounted) return;
       setState(() {
         _currentUser = index > 0 ? _users[index - 1] : _users.first;
       });
@@ -393,27 +380,29 @@ class _MyHomePageState extends State<MyHomePage> {
     showTransactions();
   }
 
-  Future<void> filterDataOfUser(String id) async {
-    debugPrint('Filter Data By userId $id ${'-' * 100}');
-    final index = _users.indexWhere((u) => u.id == id);
+  Future<void> filterDataOfUser(User u) async {
+    debugPrint('Filter Data By userId ${u.id} ${'-' * 100}');
+    final index = _users.indexWhere((user) => user.id == u.id);
     try {
       final result = await Future.wait([
-        widget.cRepo.getByUserId(id),
-        widget.tRepo.getByUserId(id),
+        widget.cRepo.getByUserId(u.id),
+        widget.tRepo.getByUserId(u.id),
       ]);
       if (!mounted || index == -1) return;
       setState(() {
+        _currentUser = u;
         _categories = result[0] as List<Category>;
+        if (_categories.isNotEmpty) _currentCategory = _categories.last;
         _transactions = result[1] as List<Transaction>;
         _cMsg = _categories.isEmpty ? 'No categories for this user.' : '';
         _tMsg = _transactions.isEmpty ? 'No transactions for this user.' : '';
         _pageMsg = _categories.isEmpty && _transactions.isEmpty
             ? 'No data for this user.'
             : '';
-        _currentUser = _users.firstWhere((u) => u.id == id);
       });
     } catch (e) {
       debugPrint('Error filtering data by user: $e');
+      if (!mounted) return;
       setState(() {
         _categories = [];
         _transactions = [];
@@ -425,12 +414,13 @@ class _MyHomePageState extends State<MyHomePage> {
     showTransactions();
   }
 
-  Future<void> filterTransactionsByCategory(String id) async {
-    debugPrint('Filter Transactions By categoryId $id ${'-' * 100}');
+  Future<void> filterTransactionsByCategory(Category c) async {
+    debugPrint('Filter Transactions By categoryId ${c.id} ${'-' * 100}');
     try {
-      final transactionsList = await widget.tRepo.getByCategoryId(id);
+      final transactionsList = await widget.tRepo.getByCategoryId(c.id);
       if (!mounted) return;
       setState(() {
+        _currentCategory = c;
         _transactions = transactionsList;
         _tMsg = _transactions.isEmpty
             ? 'No transactions for this category.'
@@ -438,6 +428,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     } catch (e) {
       debugPrint('Error filtering transactions by category: $e');
+      if (!mounted) return;
       setState(() {
         _transactions = [];
         _tMsg = 'No transactions for this category. \nError: $e';
@@ -454,14 +445,19 @@ class _MyHomePageState extends State<MyHomePage> {
           ? _users.indexOf(_currentUser!)
           : -1;
       if (checkUser == null && checkUserId != -1) {
-        final result = await Future.wait([
-          widget.uRepo.updateUser(id: _currentUser!.id, username: username),
-          widget.uRepo.getById(_currentUser!.id),
-        ]);
+        final result = await widget.uRepo.updateUser(
+          id: _currentUser!.id,
+          username: username,
+        );
+        if (result == null) {
+          debugPrint('Update user info gone wrong, no result.');
+          return;
+        }
+        if (!mounted) return;
         setState(() {
           _uMsg =
               'User ${_currentUser != null ? _currentUser!.username : 'Unknown'} has been updated to $username.';
-          _currentUser = _users[checkUserId] = result[1] as User;
+          _currentUser = _users[checkUserId] = result;
           _pageMsg = '';
         });
         showUsers();
@@ -472,6 +468,7 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     } catch (e) {
       debugPrint('Error updating user: $e');
+      if (!mounted) return;
       setState(() {
         _users = [];
         _uMsg = 'No users yet.';
@@ -520,27 +517,39 @@ class _MyHomePageState extends State<MyHomePage> {
                           item2String: ((u) => u.username),
                           title: 'Users',
                           subtitle: _uMsg,
-                          onChanged: (id, type) {
-                            switch (type) {
-                              case 'remove':
-                                removeUser(id);
-                              case 'filter':
-                                filterDataOfUser(id);
+                          actions: const {
+                            ListItemAction.remove,
+                            ListItemAction.filter,
+                          },
+                          onAction: (user, action) {
+                            switch (action) {
+                              case ListItemAction.remove:
+                                removeUser(user.id);
+                              case ListItemAction.filter:
+                                filterDataOfUser(user);
+                              case ListItemAction.edit:
+                                break;
                             }
                           },
                         ),
                         TListTemplate(
                           maxWidth: MediaQuery.of(context).size.width * 0.3,
                           items: _categories,
-                          item2String: ((c) => c.id),
+                          item2String: ((c) => c.name),
                           title: 'Categories',
                           subtitle: _cMsg,
-                          onChanged: (id, type) {
-                            switch (type) {
-                              case 'remove':
-                                removeCategory(id);
-                              case 'filter':
-                                filterTransactionsByCategory(id);
+                          actions: const {
+                            ListItemAction.remove,
+                            ListItemAction.filter,
+                          },
+                          onAction: (catg, action) {
+                            switch (action) {
+                              case ListItemAction.remove:
+                                removeCategory(catg.id);
+                              case ListItemAction.filter:
+                                filterTransactionsByCategory(catg);
+                              case ListItemAction.edit:
+                                break;
                             }
                           },
                         ),
@@ -550,10 +559,15 @@ class _MyHomePageState extends State<MyHomePage> {
                           item2String: ((t) => t.id),
                           title: 'Transactions',
                           subtitle: _tMsg,
-                          onChanged: (id, type) {
-                            switch (type) {
-                              case 'remove':
-                                removeTransaction(id);
+                          actions: const {ListItemAction.remove},
+                          onAction: (trans, action) {
+                            switch (action) {
+                              case ListItemAction.remove:
+                                removeTransaction(trans.id);
+                              case ListItemAction.filter:
+                                break;
+                              case ListItemAction.edit:
+                                break;
                             }
                           },
                         ),
@@ -579,12 +593,12 @@ class _MyHomePageState extends State<MyHomePage> {
                         dropdownMenuEntries: _users
                             .map(
                               (u) => DropdownMenuEntry(
-                                value: u.id,
+                                value: u,
                                 label: u.username,
                               ),
                             )
                             .toList(),
-                        initialSelection: _currentUser?.id,
+                        initialSelection: _currentUser,
                         onSelected: (value) {
                           if (value != null) {
                             filterDataOfUser(value);
@@ -613,12 +627,14 @@ class _MyHomePageState extends State<MyHomePage> {
                     spacing: 10,
                     runSpacing: 10,
                     children: [
+                      // TODO: implement update category name by controller text field
                       TextField(
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           border: OutlineInputBorder(),
                           labelText:
                               'Input category name to create new category',
                         ),
+                        // groupId: EditableText(controller: controller, focusNode: focusNode, style: style, cursorColor: cursorColor, backgroundCursorColor: backgroundCursorColor),
                         onSubmitted: (value) {
                           if (value.isNotEmpty) {
                             addCategory(name: value, type: _currentCatgType);

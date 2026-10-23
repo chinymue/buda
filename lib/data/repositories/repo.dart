@@ -15,6 +15,9 @@ String labelForTypeEnum(TypeEnum type) {
   }
 }
 
+// TODO: add test for changed create functions on User, Category, Transaction (return obj), update User,
+// TODO: change other functions as well to have better return data for UI
+
 class UserRepo {
   final AppDatabase db;
   UserRepo({required this.db});
@@ -30,9 +33,15 @@ class UserRepo {
   // INSERT
   // Future<int> create({required UsersCompanion u}) =>
   //     db.into(db.users).insert(u);
-  Future<int> createUser({required String id, required String username}) => db
-      .into(db.users)
-      .insert(UsersCompanion.insert(id: id, username: username));
+  Future<User?> createUser({
+    required String id,
+    required String username,
+  }) async {
+    await db
+        .into(db.users)
+        .insert(UsersCompanion.insert(id: id, username: username));
+    return getById(id);
+  }
 
   // UPDATE
   // Future<bool> update({required User u}) => db.update(db.users).replace(u);
@@ -46,13 +55,18 @@ class UserRepo {
     return Future.value(-1);
   }
 
-  Future<int> updateUser({required String id, required String username}) =>
-      (db.update(db.users)..where((user) => user.id.equals(id))).write(
-        UsersCompanion(
-          username: Value(username),
-          modifiedAt: Value(DateTime.now()),
-        ),
-      );
+  Future<User?> updateUser({
+    required String id,
+    required String username,
+  }) async {
+    await (db.update(db.users)..where((user) => user.id.equals(id))).write(
+      UsersCompanion(
+        username: Value(username),
+        modifiedAt: Value(DateTime.now()),
+      ),
+    );
+    return getById(id);
+  }
 
   // DELETE
   Future<int> clear() => db.delete(db.users).go();
@@ -118,21 +132,24 @@ class CategoryRepo {
   // INSERT
   // Future<int> create({required CategoriesCompanion u}) =>
   //     db.into(db.categories).insert(u);
-  Future<int> createCategory({
+  Future<Category?> createCategory({
     required String id,
     String? name,
     String? type,
     required String userId,
-  }) => db
-      .into(db.categories)
-      .insert(
-        CategoriesCompanion.insert(
-          id: id,
-          name: name != null ? Value(name) : const Value.absent(),
-          type: type != null ? Value(type) : const Value.absent(),
-          userId: userId,
-        ),
-      );
+  }) async {
+    await db
+        .into(db.categories)
+        .insert(
+          CategoriesCompanion.insert(
+            id: id,
+            name: name != null ? Value(name) : const Value.absent(),
+            type: type != null ? Value(type) : const Value.absent(),
+            userId: userId,
+          ),
+        );
+    return getById(id);
+  }
 
   // UPDATE
   // Future<bool> update({required Category u}) => db.update(db.categories).replace(u);
@@ -305,7 +322,7 @@ class TransactionRepo {
   // INSERT
   Future<int> create({required TransactionsCompanion t}) =>
       db.into(db.transactions).insert(t);
-  Future<int> createTransaction({
+  Future<Transaction?> createTransaction({
     required String id,
     required int amount,
     String? type,
@@ -314,7 +331,7 @@ class TransactionRepo {
     required String userId,
   }) async {
     if (amount < 0) {
-      return Future.value(-1);
+      return Future.value();
     }
     if (categoryId != null && type == null) {
       final category = await CategoryRepo(db: db).getById(categoryId);
@@ -323,7 +340,7 @@ class TransactionRepo {
     type ??= 'expense';
     final ts = DateTime.now();
     date ??= ts;
-    return db
+    await db
         .into(db.transactions)
         .insert(
           TransactionsCompanion.insert(
@@ -337,6 +354,7 @@ class TransactionRepo {
             modifiedAt: Value(ts),
           ),
         );
+    return getById(id);
   }
 
   // DELETE

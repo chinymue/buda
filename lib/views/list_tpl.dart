@@ -1,54 +1,45 @@
 import 'package:flutter/material.dart';
 
-// TODO: fix item2string -> can perform action on multi field instead of rely on id
-class TListTemplate<T> extends ListTemplate {
-  TListTemplate({
-    super.key,
-    required List<T> items,
-    required String Function(T item) item2String,
-    required super.title,
-    super.subtitle,
-    super.maxWidth,
-    super.maxHeight,
-    required super.onChanged,
-  }) : super(items: items.map(item2String).toList());
-}
+enum ListItemAction { remove, edit, filter }
 
-class ListTemplate extends StatelessWidget {
-  final List<String> items;
+class TListTemplate<T> extends StatelessWidget {
+  final List<T> items;
+  final String Function(T item) item2String;
   final String title;
   final String? subtitle;
-  final double maxWidth, maxHeight;
-  final void Function(String, String) onChanged;
+  final double maxWidth;
+  final double maxHeight;
+  final Set<ListItemAction> actions;
+  final void Function(T item, ListItemAction action) onAction;
 
-  const ListTemplate({
+  const TListTemplate({
     super.key,
     required this.items,
+    required this.item2String,
     required this.title,
     this.subtitle,
     this.maxWidth = 200,
     this.maxHeight = 400,
-    required this.onChanged,
+    this.actions = const {},
+    required this.onAction,
   });
+
+  IconData _iconFor(ListItemAction action) => switch (action) {
+    ListItemAction.remove => Icons.remove,
+    ListItemAction.edit => Icons.edit,
+    ListItemAction.filter => Icons.filter_alt,
+  };
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Fix onchanged detection for actions. Currently can't check by toSring(): Onchanged: Closure: (String, String) => void.
-    // debugPrint('ListTemplate build: $title, items: ${items.length}');
-    // debugPrint('Onchanged: ${onChanged.toString()}');
-    final bool hasRemove = onChanged.toString().contains('remove');
-    final bool hasEdit = onChanged.toString().contains('edit');
-    final bool hasFilter = onChanged.toString().contains('filter');
-    final int actionCount =
-        (hasRemove ? 1 : 0) + (hasEdit ? 1 : 0) + (hasFilter ? 1 : 0);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.primaries[0].shade100,
         border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(8),
         child: SizedBox(
           width: maxWidth,
           height: maxHeight,
@@ -58,38 +49,23 @@ class ListTemplate extends StatelessWidget {
               if (subtitle != null) Text(subtitle!),
               SizedBox(
                 width: maxWidth,
-                height:
-                    maxHeight -
-                    100, // Adjust height to account for title and subtitle
+                height: maxHeight - 100,
                 child: ListView(
-                  scrollDirection: Axis.vertical,
                   children: [
-                    for (String item in items)
+                    for (final item in items)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           ListTileTemplate(
-                            maxWidth: maxWidth - 50 * actionCount,
+                            maxWidth: maxWidth - 50 * actions.length,
                             maxHeight: 50,
-                            item: item,
+                            item: item2String(item),
                           ),
-                          if (hasRemove)
+                          for (final action in actions)
                             IconButton(
                               alignment: Alignment.centerRight,
-                              onPressed: () => onChanged(item, 'remove'),
-                              icon: const Icon(Icons.remove),
-                            ),
-                          if (hasEdit)
-                            IconButton(
-                              alignment: Alignment.centerRight,
-                              onPressed: () => onChanged(item, 'edit'),
-                              icon: const Icon(Icons.edit),
-                            ),
-                          if (hasFilter)
-                            IconButton(
-                              alignment: Alignment.centerRight,
-                              onPressed: () => onChanged(item, 'filter'),
-                              icon: const Icon(Icons.filter_alt),
+                              onPressed: () => onAction(item, action),
+                              icon: Icon(_iconFor(action)),
                             ),
                         ],
                       ),

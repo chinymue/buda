@@ -1,30 +1,86 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:buda_mvp/main.dart';
+import 'package:buda_mvp/views/list_tpl copy.dart';
+
+// $time = Get-Date -Format "yyyyMMdd_HHmmss"
+// flutter run -d chrome --web-port 3000 D:\Project\Flutter\buda_mvp\test\widget_test.dart 2>&1 | Tee-Object -FilePath capture_log/test/"web_build_$time.txt"
+// $time = Get-Date -Format "yyyyMMdd_HHmmss"
+// flutter run -d window D:\Project\Flutter\buda_mvp\test\widget_test.dart 2>&1 | Tee-Object -FilePath capture_log/test/"window_build_$time.txt"
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('list template scrolls and dispatches typed actions on mobile', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    ListItemAction? selectedAction;
+    String? selectedItem;
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: TListTemplate<String>(
+              maxWidth: 288,
+              items: List.generate(100, (index) => 'Item $index'),
+              item2String: (item) => item,
+              title: 'Items',
+              actions: const [ListItemAction.remove, ListItemAction.filter],
+              onChanged: (item, action) {
+                selectedItem = item;
+                selectedAction = action;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Item 0'), findsOneWidget);
+    expect(find.text('Item 99'), findsNothing);
+
+    await tester.tap(find.byTooltip('Filter').first);
+    expect(selectedItem, 'Item 0');
+    expect(selectedAction, ListItemAction.filter);
+  });
+
+  testWidgets('action buttons wrap to fit a narrow screen', (tester) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 288,
+            child: ListActionTemplate(
+              actions: [
+                ('Add user', _noop),
+                ('Add category', _noop),
+                ('Add Transaction', _noop),
+                ('Clear all data', _noop),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Add user'), findsOneWidget);
+    expect(find.text('Clear all data'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Add user')).dy,
+      lessThan(tester.getTopLeft(find.text('Clear all data')).dy),
+    );
   });
 }
+
+void _noop() {}
