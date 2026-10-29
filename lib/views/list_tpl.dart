@@ -4,7 +4,8 @@ enum ListItemAction { remove, edit, filter }
 
 class TListTemplate<T> extends StatelessWidget {
   final List<T> items;
-  final String Function(T item) item2String;
+  final String Function(T item) toTitle;
+  final String Function(T item)? toSubtitle, toTrailing;
   final String title;
   final String? subtitle;
   final double maxWidth;
@@ -15,7 +16,9 @@ class TListTemplate<T> extends StatelessWidget {
   const TListTemplate({
     super.key,
     required this.items,
-    required this.item2String,
+    required this.toTitle,
+    this.toSubtitle,
+    this.toTrailing,
     required this.title,
     this.subtitle,
     this.maxWidth = 200,
@@ -59,7 +62,9 @@ class TListTemplate<T> extends StatelessWidget {
                           ListTileTemplate(
                             maxWidth: maxWidth - 50 * actions.length,
                             maxHeight: 50,
-                            item: item2String(item),
+                            title: toTitle(item),
+                            subtitle: toSubtitle?.call(item),
+                            trailing: toTrailing?.call(item),
                           ),
                           for (final action in actions)
                             IconButton(
@@ -81,12 +86,15 @@ class TListTemplate<T> extends StatelessWidget {
 }
 
 class ListTileTemplate extends StatelessWidget {
-  final String item;
+  final String title;
+  final String? subtitle, trailing;
   final double maxWidth, maxHeight;
 
   const ListTileTemplate({
     super.key,
-    required this.item,
+    required this.title,
+    this.subtitle,
+    this.trailing,
     required this.maxWidth,
     required this.maxHeight,
   });
@@ -96,7 +104,15 @@ class ListTileTemplate extends StatelessWidget {
     return SizedBox(
       width: maxWidth,
       height: maxHeight,
-      child: ListTile(title: Text(item)),
+      child: (subtitle != null) & (trailing != null)
+          ? ListTile(
+              title: Text(title),
+              subtitle: Text(subtitle!),
+              trailing: Text(trailing!),
+            )
+          : ((subtitle != null)
+                ? ListTile(title: Text(title), subtitle: Text(subtitle!))
+                : ListTile(title: Text(title))),
     );
   }
 }

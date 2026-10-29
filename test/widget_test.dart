@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:buda_mvp/views/list_tpl copy.dart';
+import 'package:buda_mvp/views/list_tpl_copy.dart';
 
 // $time = Get-Date -Format "yyyyMMdd_HHmmss"
 // flutter run -d chrome --web-port 3000 D:\Project\Flutter\buda_mvp\test\widget_test.dart 2>&1 | Tee-Object -FilePath capture_log/test/"web_build_$time.txt"
